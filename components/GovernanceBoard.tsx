@@ -141,9 +141,6 @@ export default function GovernanceBoard() {
       </div>
 
       <div className="mx-auto max-w-[1400px]">
-        {/* The pipeline, as a live flowchart of the sponsors doing the work. */}
-        <PipelineFlow integrations={integrations} running={running} />
-
         {/* Give the floor a goal — the only input the human provides. */}
         <div className="border-b border-black/10 px-6 py-6 md:px-10">
           <label className="mb-2 block font-display text-[10px] uppercase tracking-[0.25em] text-black/45">
@@ -193,67 +190,65 @@ export default function GovernanceBoard() {
           )}
         </div>
 
-        {/* The work — accounts, cited signals, drafts, one full-width pill each */}
-        <section className="space-y-4 border-b border-black/10 bg-white p-6 md:p-10">
-          <h2 className="font-display text-xs uppercase tracking-[0.25em] text-black/45">The work</h2>
+        {/* Before there's a run to show, the pipeline flowchart fills the
+            space where the work and the governance timeline will land —
+            live sponsors doing the work, instead of two empty placeholders. */}
+        {!floor && <PipelineFlow integrations={integrations} running={running} />}
 
-          {!floor && (
-            <p className="font-accent text-lg italic text-black/40">
-              State an outcome. The floor finds the accounts, cites a reason to reach out, drafts
-              the outreach, and brings you only what needs your judgment.
-            </p>
-          )}
+        {floor && (
+          <>
+            {/* The work — accounts, cited signals, drafts, one full-width pill each */}
+            <section className="space-y-4 border-b border-black/10 bg-white p-6 md:p-10">
+              <h2 className="font-display text-xs uppercase tracking-[0.25em] text-black/45">
+                The work
+              </h2>
 
-          {awaitingApproval.length > 0 && (
-            <div className="rounded-2xl border border-black bg-amber-50 p-4">
-              <p className="font-display text-xs uppercase tracking-wide text-black">
-                {awaitingApproval.length} account{awaitingApproval.length === 1 ? "" : "s"} escalated
-                to you — the Manager has no authority to send these.
-              </p>
-            </div>
-          )}
+              {awaitingApproval.length > 0 && (
+                <div className="rounded-2xl border border-black bg-amber-50 p-4">
+                  <p className="font-display text-xs uppercase tracking-wide text-black">
+                    {awaitingApproval.length} account{awaitingApproval.length === 1 ? "" : "s"} escalated
+                    to you — the Manager has no authority to send these.
+                  </p>
+                </div>
+              )}
 
-          {revealedRuns.map((run) => (
-            <AccountCard
-              key={run.runId}
-              run={run}
-              integrations={integrations}
-              note={notes[run.runId] ?? ""}
-              onNote={(v) => setNotes((n) => ({ ...n, [run.runId]: v }))}
-              onDecide={(d) => decide(run, d)}
-              deciding={deciding === run.runId}
-              canDecide={revealDone}
-            />
-          ))}
+              {revealedRuns.map((run) => (
+                <AccountCard
+                  key={run.runId}
+                  run={run}
+                  integrations={integrations}
+                  note={notes[run.runId] ?? ""}
+                  onNote={(v) => setNotes((n) => ({ ...n, [run.runId]: v }))}
+                  onDecide={(d) => decide(run, d)}
+                  deciding={deciding === run.runId}
+                  canDecide={revealDone}
+                />
+              ))}
 
-          {revealDone &&
-            floor?.skipped.map((s) => (
-              <div key={s.accountId} className="rounded-full border border-dashed border-black/15 px-5 py-3">
-                <span className="font-display text-xs uppercase tracking-wide text-black/45">
-                  {s.accountName}
-                </span>
-                <span className="ml-2 text-xs text-black/40">Skipped — {s.reason}</span>
-              </div>
-            ))}
-        </section>
+              {revealDone &&
+                floor?.skipped.map((s) => (
+                  <div key={s.accountId} className="rounded-full border border-dashed border-black/15 px-5 py-3">
+                    <span className="font-display text-xs uppercase tracking-wide text-black/45">
+                      {s.accountName}
+                    </span>
+                    <span className="ml-2 text-xs text-black/40">Skipped — {s.reason}</span>
+                  </div>
+                ))}
+            </section>
 
-        {/* Governance timeline — streams below the results, full width */}
-        <section className="bg-white p-6 md:p-10">
-          <h2 className="mb-3 font-display text-xs uppercase tracking-[0.25em] text-black/45">
-            Governance timeline
-          </h2>
-          {!floor && (
-            <p className="font-accent text-lg italic text-black/40">
-              Every delegation, handoff, veto, escalation, and approval — with the authority rule
-              that fired — streams here as it happens.
-            </p>
-          )}
-          <ol className="space-y-3">
-            {visibleLog.map((entry) => (
-              <TimelineRow key={entry.id} entry={entry} />
-            ))}
-          </ol>
-        </section>
+            {/* Governance timeline — streams below the results, full width */}
+            <section className="bg-white p-6 md:p-10">
+              <h2 className="mb-3 font-display text-xs uppercase tracking-[0.25em] text-black/45">
+                Governance timeline
+              </h2>
+              <ol className="space-y-3">
+                {visibleLog.map((entry) => (
+                  <TimelineRow key={entry.id} entry={entry} />
+                ))}
+              </ol>
+            </section>
+          </>
+        )}
       </div>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}

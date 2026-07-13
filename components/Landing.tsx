@@ -135,7 +135,7 @@ export default function Landing() {
             href="/dashboard"
             className="ml-auto border border-black px-4 py-2 font-display text-xs uppercase tracking-wide transition-colors hover:bg-black hover:text-white lg:ml-0"
           >
-            Login / Sign in
+            Live Demo
           </a>
         </div>
 
@@ -168,7 +168,7 @@ export default function Landing() {
                 className="mt-8 inline-block bg-[#0b1220] px-8 py-3 font-display text-xs uppercase tracking-[0.2em] text-white"
                 sheenClassName="bg-white/25"
               >
-                Start Free Trial
+                Live Demo
               </SheenLink>
             </div>
             <div style={{ animationDelay: "0.55s" }} className="mt-16 w-full border-t border-black/10 pt-8">
@@ -231,7 +231,7 @@ export default function Landing() {
           className="mt-8 inline-block bg-white px-8 py-3 font-display text-xs uppercase tracking-[0.2em] text-black"
           sheenClassName="bg-black/10"
         >
-          Start Free Trial
+          Live Demo
         </SheenLink>
       </section>
 

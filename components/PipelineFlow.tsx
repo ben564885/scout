@@ -8,6 +8,11 @@ import { SponsorLogo } from "./SponsorLogo";
 // "live," not a static logo strip. Nodes dim to grayscale when that
 // integration isn't actually configured, matching the honesty rule the dot
 // row already followed (real status, not vaporware).
+//
+// Laid out as a two-row "snake": row one runs left-to-right, a vertical
+// arrow drops from its last node, and row two continues right-to-left from
+// directly below — so the last node of row one and the first node of row
+// two share the same column and the down-arrow reads as a clean continuation.
 
 type IntegrationKey = "kylon" | "band" | "nimble" | "youdotcom" | "insforge" | "hydra";
 
@@ -33,12 +38,14 @@ const FLOW: FlowNode[] = [
   { key: "hydra", src: "/hydra.png", alt: "Hydra", label: "Memory" },
 ];
 
-function FlowArrow({ active }: { active: boolean }) {
+const ROW_SIZE = 4;
+
+function FlowArrow({ active, flip }: { active: boolean; flip?: boolean }) {
   return (
     <svg
       viewBox="0 0 100 20"
       preserveAspectRatio="none"
-      className="h-5 w-full min-w-[24px] flex-1"
+      className={`h-6 w-full min-w-[28px] flex-1 ${flip ? "-scale-x-100" : ""}`}
       aria-hidden
     >
       <line
@@ -57,6 +64,40 @@ function FlowArrow({ active }: { active: boolean }) {
   );
 }
 
+function DownArrow({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 20 72" className="h-20 w-7 shrink-0" aria-hidden>
+      <line
+        x1="10"
+        y1="2"
+        x2="10"
+        y2="60"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="6 6"
+        className="text-black/25"
+        style={{ animation: `dashFlow ${active ? "0.5s" : "2.2s"} linear infinite` }}
+      />
+      <path d="M5 60 L10 70 L15 60 Z" fill="currentColor" className="text-black/35" />
+    </svg>
+  );
+}
+
+function FlowNodeCell({ node, live }: { node: FlowNode; live: boolean }) {
+  return (
+    <div className="flex w-[120px] shrink-0 flex-col items-center gap-3 text-center sm:w-[152px]">
+      <SponsorLogo src={node.src} alt={node.alt} live={live} size={88} fit={node.fit} />
+      <span
+        className={`font-display text-xs uppercase leading-tight tracking-wide sm:text-sm ${
+          live ? "text-black/55" : "text-black/25"
+        }`}
+      >
+        {node.label}
+      </span>
+    </div>
+  );
+}
+
 export default function PipelineFlow({
   integrations,
   running,
@@ -64,34 +105,48 @@ export default function PipelineFlow({
   integrations: Partial<Record<IntegrationKey, boolean>> | null;
   running: boolean;
 }) {
+  const row1 = FLOW.slice(0, ROW_SIZE);
+  const row2 = FLOW.slice(ROW_SIZE);
+
+  const isLive = (node: FlowNode) =>
+    node.key === "rocketride" ? true : integrations?.[node.key as IntegrationKey] !== false;
+
   return (
-    <div className="border-b border-black/10 px-6 py-6 md:px-10">
-      <div className="mb-4 font-display text-[10px] uppercase tracking-[0.25em] text-black/45">
+    <div className="px-8 py-16 md:px-16 md:py-24">
+      <div className="mb-14 text-center font-display text-sm uppercase tracking-[0.35em] text-black/45">
         The floor, live
       </div>
-      <div className="flex flex-wrap items-start gap-x-1 gap-y-6 sm:flex-nowrap">
-        {FLOW.map((node, i) => {
-          const live = node.key === "rocketride" ? true : integrations?.[node.key] !== false;
-          return (
-            <div key={node.key} className="flex flex-1 items-start sm:contents">
-              <div className="flex w-[76px] shrink-0 flex-col items-center gap-2 text-center sm:w-[88px]">
-                <SponsorLogo src={node.src} alt={node.alt} live={live} size={48} fit={node.fit} />
-                <span
-                  className={`font-display text-[9px] uppercase leading-tight tracking-wide ${
-                    live ? "text-black/55" : "text-black/25"
-                  }`}
-                >
-                  {node.label}
-                </span>
-              </div>
-              {i < FLOW.length - 1 && (
-                <div className="mt-6 flex flex-1 items-center text-black/25">
+
+      <div className="mx-auto flex max-w-6xl flex-col">
+        <div className="flex items-start gap-2 sm:gap-4">
+          {row1.map((node, i) => (
+            <div key={node.key} className="flex flex-1 items-start">
+              <FlowNodeCell node={node} live={isLive(node)} />
+              {i < row1.length - 1 && (
+                <div className="mt-11 flex flex-1 items-center text-black/25">
                   <FlowArrow active={running} />
                 </div>
               )}
             </div>
-          );
-        })}
+          ))}
+        </div>
+
+        <div className="flex justify-end">
+          <DownArrow active={running} />
+        </div>
+
+        <div className="flex flex-row-reverse items-start gap-2 sm:gap-4">
+          {row2.map((node, i) => (
+            <div key={node.key} className="flex flex-1 items-start">
+              {i < row2.length - 1 && (
+                <div className="mt-11 flex flex-1 items-center text-black/25">
+                  <FlowArrow active={running} flip />
+                </div>
+              )}
+              <FlowNodeCell node={node} live={isLive(node)} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
