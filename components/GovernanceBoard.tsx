@@ -280,7 +280,7 @@ function AccountCard({
 
   return (
     <div
-      className={`space-y-3 rounded-[28px] border bg-white p-5 transition-colors md:p-6 ${
+      className={`animate-[fadeIn_0.4s_ease-out] space-y-3 rounded-[28px] border bg-white p-5 transition-colors md:p-6 ${
         needsMe ? "border-black shadow-[0_1px_0_0_rgba(0,0,0,0.05)]" : "border-black/10"
       }`}
     >
