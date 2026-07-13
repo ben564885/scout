@@ -1,3 +1,7 @@
+# Scout
+
+**Read [`docs/PRD.md`](docs/PRD.md) before changing anything in `lib/` or `app/`.** It is the source of truth for what Scout is, the authority-boundary invariants the governance loop must never break (the Writer cannot send; the Manager cannot approve a high-value account), what is deliberately out of scope, and what the live demo depends on.
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
