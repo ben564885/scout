@@ -1,24 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
-import { recordHumanDecision, runFloor } from "@/lib/pipeline";
-import { mirrorApprovalToBand, mirrorRunToBand } from "@/lib/band";
-import { getPendingEscalation } from "@/lib/store";
-import { normalizePhone, sendSms, verifyTwilioSignature } from "@/lib/twilio";
-import { floorSummaryText, sendFloorReportEmail } from "@/lib/notify";
+import { normalizePhone, verifyTwilioSignature } from "@/lib/twilio";
+import { handleIncomingText } from "@/lib/text-command";
 
-// Twilio's text-in/text-out channel onto the floor. Two things a text can do:
-//   1. Any text that isn't "approve"/"reject" is a new goal — same entry
-//      point as the web UI's POST /api/goal (runFloor), just triggered by SMS.
-//   2. "approve"/"reject" resolves whatever escalation is currently pending,
-//      through the exact same recordHumanDecision + mirrorApprovalToBand path
-//      app/api/runs/[id]/approve uses — texting is last-mile delivery only
-//      (PRD §6.3: "Band = brain, iMessage = mouth"), never a parallel
-//      approval mechanism.
+// Twilio's SMS/WhatsApp webhook onto the floor. Signature-verified, then
+// delegates to lib/text-command.ts for the actual approve/reject-vs-new-goal
+// logic (shared with app/api/agent-relay/route.ts, the same-day emergency
+// fallback channel) — this file only owns Twilio-specific concerns:
+// signature verification, form-data parsing, and the TwiML response shape.
 //
-// Twilio needs a fast response (~15s) to the webhook itself, so the actual
-// work runs in the background via `after()` — the same deferred-execution
-// pattern already used in api/goal and api/runs/[id]/approve — and results
-// go out as separate outbound sends once the run finishes.
+// Twilio needs a fast response (~15s) to the webhook itself; the actual work
+// runs in the background via `after()` inside handleIncomingText, the same
+// deferred-execution pattern already used in api/goal and
+// api/runs/[id]/approve — results go out as separate outbound sends once
+// the run finishes.
 
 export const maxDuration = 120;
 
@@ -65,35 +59,6 @@ export async function POST(req: NextRequest) {
   const body = (params.Body ?? "").trim();
   if (!body) return twiml();
 
-  const decisionMatch = body.match(/^(approve|reject)\b\s*(.*)$/i);
-  if (decisionMatch) {
-    const decision = decisionMatch[1].toLowerCase() as "approve" | "reject";
-    const note = decisionMatch[2].trim() || undefined;
-    const pending = getPendingEscalation();
-    if (!pending) {
-      return twiml("no pending escalation right now.");
-    }
-
-    after(async () => {
-      const entry = recordHumanDecision(pending.runId, pending.draftId, decision, note, "imessage");
-      if (entry) await mirrorApprovalToBand(pending.runId, entry.detail);
-      await sendSms(
-        ownerNumber,
-        `${decision === "approve" ? "approved" : "rejected"} — ${pending.accountName}. band recorded the decision.`
-      );
-    });
-
-    return twiml(`on it — ${decision === "approve" ? "approving" : "rejecting"} ${pending.accountName}.`);
-  }
-
-  after(async () => {
-    const floor = await runFloor(body);
-    for (const run of floor.runs) {
-      await mirrorRunToBand(run);
-    }
-    await sendSms(ownerNumber, floorSummaryText(floor));
-    await sendFloorReportEmail(floor);
-  });
-
-  return twiml(`got it — running the floor on: "${body}". i'll text you when it's done.`);
+  const ack = await handleIncomingText(body);
+  return twiml(ack);
 }

@@ -1,4 +1,6 @@
 import { FloorRun, PipelineResult } from "./types";
+import { sendSms } from "./twilio";
+import { sendViaHermesSsh } from "./hermes-notify";
 
 // Builds the two "done" notifications Ben receives when a floor run
 // completes: a short SMS (lib/twilio.ts) and a fuller HTML email. Email goes
@@ -7,6 +9,20 @@ import { FloorRun, PipelineResult } from "./types";
 // InsForge plan and Scout's main project is on free tier, so a second,
 // dedicated Pro-plan project sends the report without touching the app's
 // real data/backend.
+
+// Outbound text channel toggle (2026-07-13): NOTIFY_CHANNEL=hermes-ssh routes
+// through lib/hermes-notify.ts (the emergency same-day fallback, since
+// Scout's own Twilio numbers are stuck in carrier verification) instead of
+// Twilio SMS/WhatsApp. Flip back to "twilio" (the default) once a real
+// number clears verification — no other code change needed.
+export async function notifyOwner(text: string): Promise<void> {
+  if (process.env.NOTIFY_CHANNEL === "hermes-ssh") {
+    await sendViaHermesSsh(text);
+    return;
+  }
+  const owner = process.env.TWILIO_OWNER_PHONE_NUMBER;
+  if (owner) await sendSms(owner, text);
+}
 
 export function floorSummaryText(floor: FloorRun): string {
   const escalated = floor.runs.filter((r) => r.requiresHuman);
