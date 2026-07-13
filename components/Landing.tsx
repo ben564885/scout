@@ -255,10 +255,11 @@ export default function Landing() {
         </div>
 
         {/* Hero — right (photo panel) */}
-        <div className="relative min-h-[520px] overflow-hidden bg-[radial-gradient(ellipse_at_50%_25%,#2a4680_0%,#132349_45%,#060c1c_100%)]">
-          <div className="pointer-events-none absolute -left-10 top-16 h-40 w-64 rounded-full bg-white/10 blur-3xl" />
-          <div className="pointer-events-none absolute right-0 top-6 h-32 w-48 rounded-full bg-white/10 blur-3xl" />
-          <div className="pointer-events-none absolute bottom-24 left-1/3 h-24 w-40 rounded-full bg-white/5 blur-2xl" />
+        <div
+          className="relative min-h-[520px] overflow-hidden bg-cover bg-center"
+          style={{ backgroundImage: "url(/cloudBg.jpg)" }}
+        >
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(6,12,28,0.15)_0%,rgba(6,12,28,0.05)_40%,rgba(6,12,28,0.55)_100%)]" />
 
           <div className="absolute inset-0">
             <HeroArt />
