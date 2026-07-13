@@ -101,6 +101,17 @@ export type AuditLogEntry = {
   accountName?: string;
 };
 
+// Settings page: the sender's own company background, used to ground Writer
+// drafts. Single row, sourced from a pasted URL, an uploaded file, or manual
+// text.
+export type CompanyContext = {
+  content: string;
+  sourceType: "manual" | "url" | "file";
+  sourceLabel: string | null;
+  fileUrl: string | null;
+  updatedAt: string | null;
+};
+
 export type Policy = {
   id: string;
   name: string;
