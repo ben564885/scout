@@ -1,12 +1,12 @@
 import { AuditAction, AuditActor } from "./types";
 
 export const ACTOR_META: Record<AuditActor, { label: string; icon: string; color: string }> = {
-  prospector: { label: "Prospector", icon: "🔍", color: "text-sky-400" },
-  researcher: { label: "Researcher", icon: "📚", color: "text-teal-400" },
-  writer: { label: "Writer", icon: "✍️", color: "text-violet-400" },
-  compliance: { label: "Compliance", icon: "🛡️", color: "text-rose-400" },
-  manager: { label: "Manager", icon: "📋", color: "text-amber-400" },
-  human: { label: "You", icon: "👤", color: "text-emerald-400" },
+  prospector: { label: "Prospector", icon: "🔍", color: "text-sky-600" },
+  researcher: { label: "Researcher", icon: "📚", color: "text-teal-600" },
+  writer: { label: "Writer", icon: "✍️", color: "text-violet-600" },
+  compliance: { label: "Compliance", icon: "🛡️", color: "text-rose-600" },
+  manager: { label: "Manager", icon: "📋", color: "text-amber-600" },
+  human: { label: "You", icon: "👤", color: "text-emerald-600" },
 };
 
 export function actionBadge(action: AuditAction): { label: string; className: string } {
@@ -24,14 +24,14 @@ export function actionBadge(action: AuditAction): { label: string; className: st
     case "revise":
       return { label: "REVISED", className: "bg-violet-600 text-white" };
     case "draft":
-      return { label: "DRAFTED", className: "bg-neutral-700 text-white" };
+      return { label: "DRAFTED", className: "bg-black text-white" };
     case "verify":
       return { label: "VERIFIED", className: "bg-teal-600 text-white" };
     case "delegate":
-      return { label: "DELEGATED", className: "bg-neutral-700 text-white" };
+      return { label: "DELEGATED", className: "bg-black text-white" };
     case "handoff":
-      return { label: "HANDOFF", className: "bg-neutral-700 text-white" };
+      return { label: "HANDOFF", className: "bg-black text-white" };
     default:
-      return { label: action, className: "bg-neutral-700 text-white" };
+      return { label: action, className: "bg-black text-white" };
   }
 }

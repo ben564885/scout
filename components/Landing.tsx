@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ProblemIllustration } from "./landing/IsoArt";
+import { LogoMark, SheenLink } from "./Brand";
 
 const NAV_LINKS = ["Problem", "Product", "Pricing", "About", "Contact"];
 
@@ -34,16 +35,6 @@ const PROBLEM_CARDS: {
   },
 ];
 
-function LogoMark() {
-  return (
-    <svg viewBox="0 0 32 32" className="h-8 w-8 shrink-0">
-      <rect width="32" height="32" fill="black" />
-      <rect x="4" y="4" width="10" height="10" fill="white" />
-      <rect x="18" y="18" width="10" height="10" fill="white" />
-    </svg>
-  );
-}
-
 // Small scanning-dot accent — reads as "Scout is watching" rather than a
 // static glyph, echoing the product's always-on signal detection.
 function ScanDots() {
@@ -65,27 +56,6 @@ function NavLink({ label }: { label: string }) {
     <a href={`#${label.toLowerCase()}`} className="group relative pb-1 hover:text-black">
       {label}
       <span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-black transition-transform duration-300 ease-out group-hover:scale-x-100" />
-    </a>
-  );
-}
-
-function SheenLink({
-  href,
-  className,
-  sheenClassName,
-  children,
-}: {
-  href: string;
-  className: string;
-  sheenClassName: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <a href={href} className={`group relative overflow-hidden transition-transform hover:scale-[1.02] ${className}`}>
-      <span className="relative z-10">{children}</span>
-      <span
-        className={`pointer-events-none absolute inset-0 -translate-x-full skew-x-[-15deg] transition-transform duration-700 ease-out group-hover:translate-x-[220%] ${sheenClassName}`}
-      />
     </a>
   );
 }

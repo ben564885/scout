@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AuditLogEntry, Draft, FloorRun, PipelineResult } from "@/lib/types";
 import { ACTOR_META, actionBadge } from "@/lib/actor-meta";
+import { LogoMark, SheenButton } from "@/components/Brand";
 
 type IntegrationStatus = Record<"insforge" | "nimble" | "youdotcom" | "band" | "hydra" | "kylon", boolean>;
 
@@ -125,127 +126,150 @@ export default function GovernanceBoard() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
-      <header className="border-b border-neutral-800 px-6 py-4 flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">
-          Scout{" "}
-          <span className="text-neutral-500 font-normal">
-            — an AI SDR floor, governed through Band
+    <div className="min-h-screen bg-white text-black">
+      {/* Nav — mirrors the landing page header exactly */}
+      <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-px bg-black/10 md:grid-cols-2">
+        <div className="flex items-center gap-3 bg-white px-6 py-4 md:px-10">
+          <LogoMark />
+          <span className="font-display text-lg font-bold tracking-tight">scout.</span>
+        </div>
+        <div className="flex items-center justify-between gap-6 bg-white px-6 py-4 md:px-10">
+          <span className="font-display text-xs uppercase tracking-wide text-black/45">
+            The floor — governed through Band
           </span>
-        </h1>
+          <a
+            href="/"
+            className="ml-auto border border-black px-4 py-2 font-display text-xs uppercase tracking-wide transition-colors hover:bg-black hover:text-white lg:ml-0"
+          >
+            Back to site
+          </a>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-[1400px]">
+        {/* Integration status */}
         {integrations && (
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex flex-wrap items-center gap-5 border-b border-black/10 px-6 py-3 md:px-10">
             {INTEGRATION_LABELS.map(({ key, label }) => {
               const live = integrations[key];
               return (
                 <div
                   key={key}
-                  className="flex items-center gap-1.5 text-xs"
+                  className="flex items-center gap-1.5"
                   title={live ? `${label}: live` : `${label}: not configured — using cached fallback`}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-500" : "bg-neutral-700"}`} />
-                  <span className={live ? "text-neutral-300" : "text-neutral-600"}>{label}</span>
+                  <span className={`h-1.5 w-1.5 ${live ? "bg-black" : "bg-black/15"}`} />
+                  <span
+                    className={`font-display text-[10px] uppercase tracking-wide ${
+                      live ? "text-black/60" : "text-black/30"
+                    }`}
+                  >
+                    {label}
+                  </span>
                 </div>
               );
             })}
           </div>
         )}
-      </header>
 
-      {/* Give the floor a goal — the only input the human provides. */}
-      <div className="border-b border-neutral-800 px-6 py-5">
-        <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">
-          Give the floor a goal
-        </label>
-        <div className="flex gap-3 flex-wrap">
-          <input
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !running && runTheFloor()}
-            placeholder={EXAMPLE_GOAL}
-            className="flex-1 min-w-[280px] rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-2.5 text-sm outline-none focus:border-sky-600 transition"
-          />
-          <button
-            onClick={runTheFloor}
-            disabled={running || !goal.trim()}
-            className="rounded-lg bg-sky-600 hover:bg-sky-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-medium px-6 py-2.5 transition"
-          >
-            {running ? "Floor is working…" : "Run the floor"}
-          </button>
+        {/* Give the floor a goal — the only input the human provides. */}
+        <div className="border-b border-black/10 px-6 py-6 md:px-10">
+          <label className="mb-2 block font-display text-[10px] uppercase tracking-[0.25em] text-black/45">
+            Give the floor a goal
+          </label>
+          <div className="flex flex-wrap gap-3">
+            <input
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !running && runTheFloor()}
+              placeholder={EXAMPLE_GOAL}
+              className="min-w-[280px] flex-1 border border-black/15 px-4 py-2.5 text-sm outline-none transition-colors focus:border-black"
+            />
+            <SheenButton
+              onClick={runTheFloor}
+              disabled={running || !goal.trim()}
+              className="bg-black px-6 py-2.5 font-display text-xs uppercase tracking-[0.2em] text-white"
+              sheenClassName="bg-white/25"
+            >
+              {running ? "Floor is working…" : "Run the floor"}
+            </SheenButton>
+          </div>
+
+          {floor && (
+            <p className="mt-3 text-xs text-black/45">
+              Prospector built {floor.runs.length + floor.skipped.length} account
+              {floor.runs.length + floor.skipped.length === 1 ? "" : "s"} in {floor.goal.city},{" "}
+              {floor.goal.region} from{" "}
+              <span className={floor.prospecting.live ? "text-emerald-600" : "text-black/45"}>
+                {floor.prospecting.live ? `${floor.prospecting.sourceLabel} — live web data` : floor.prospecting.sourceLabel}
+              </span>
+              .
+            </p>
+          )}
         </div>
 
-        {floor && (
-          <p className="text-xs text-neutral-500 mt-3">
-            Prospector built {floor.runs.length + floor.skipped.length} account
-            {floor.runs.length + floor.skipped.length === 1 ? "" : "s"} in {floor.goal.city},{" "}
-            {floor.goal.region} from{" "}
-            <span className={floor.prospecting.live ? "text-emerald-400" : "text-neutral-400"}>
-              {floor.prospecting.live ? `${floor.prospecting.sourceLabel} — live web data` : floor.prospecting.sourceLabel}
-            </span>
-            .
-          </p>
-        )}
-      </div>
+        <div className="grid grid-cols-1 gap-px bg-black/10 lg:grid-cols-2">
+          {/* LEFT: the work — accounts, cited signals, drafts */}
+          <section className="space-y-4 bg-white p-6 md:p-10">
+            <h2 className="font-display text-xs uppercase tracking-[0.25em] text-black/45">The work</h2>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[calc(100vh-190px)]">
-        {/* LEFT: the work — accounts, cited signals, drafts */}
-        <section className="border-r border-neutral-800 p-6 space-y-4">
-          <h2 className="text-sm font-medium text-neutral-400 uppercase tracking-wide">The work</h2>
+            {!floor && (
+              <p className="font-accent text-lg italic text-black/40">
+                State an outcome. The floor finds the accounts, cites a reason to reach out, drafts
+                the outreach, and brings you only what needs your judgment.
+              </p>
+            )}
 
-          {!floor && (
-            <p className="text-sm text-neutral-600">
-              State an outcome. The floor finds the accounts, cites a reason to reach out, drafts the
-              outreach, and brings you only what needs your judgment.
-            </p>
-          )}
-
-          {awaitingApproval.length > 0 && (
-            <div className="rounded-lg border border-amber-700 bg-amber-500/5 p-4 space-y-3">
-              <div className="text-sm text-amber-300 font-medium">
-                {awaitingApproval.length} account{awaitingApproval.length === 1 ? "" : "s"} escalated to
-                you — the Manager has no authority to send these.
+            {awaitingApproval.length > 0 && (
+              <div className="border border-black bg-amber-50 p-4">
+                <p className="font-display text-xs uppercase tracking-wide text-black">
+                  {awaitingApproval.length} account{awaitingApproval.length === 1 ? "" : "s"} escalated
+                  to you — the Manager has no authority to send these.
+                </p>
               </div>
-            </div>
-          )}
+            )}
 
-          {revealedRuns.map((run) => (
-            <AccountCard
-              key={run.runId}
-              run={run}
-              note={notes[run.runId] ?? ""}
-              onNote={(v) => setNotes((n) => ({ ...n, [run.runId]: v }))}
-              onDecide={(d) => decide(run, d)}
-              deciding={deciding === run.runId}
-              canDecide={revealDone}
-            />
-          ))}
-
-          {revealDone &&
-            floor?.skipped.map((s) => (
-              <div key={s.accountId} className="rounded-lg border border-neutral-800 border-dashed p-4">
-                <div className="text-sm text-neutral-400 font-medium">{s.accountName}</div>
-                <p className="text-xs text-neutral-600 mt-1">Skipped — {s.reason}</p>
-              </div>
+            {revealedRuns.map((run) => (
+              <AccountCard
+                key={run.runId}
+                run={run}
+                note={notes[run.runId] ?? ""}
+                onNote={(v) => setNotes((n) => ({ ...n, [run.runId]: v }))}
+                onDecide={(d) => decide(run, d)}
+                deciding={deciding === run.runId}
+                canDecide={revealDone}
+              />
             ))}
-        </section>
 
-        {/* RIGHT: governance timeline */}
-        <section className="p-6">
-          <h2 className="text-sm font-medium text-neutral-400 uppercase tracking-wide mb-3">
-            Governance timeline
-          </h2>
-          {!floor && (
-            <p className="text-sm text-neutral-600">
-              Every delegation, handoff, veto, escalation, and approval — with the authority rule that
-              fired — streams here as it happens.
-            </p>
-          )}
-          <ol className="space-y-3">
-            {visibleLog.map((entry) => (
-              <TimelineRow key={entry.id} entry={entry} />
-            ))}
-          </ol>
-        </section>
+            {revealDone &&
+              floor?.skipped.map((s) => (
+                <div key={s.accountId} className="border border-dashed border-black/15 p-4">
+                  <div className="font-display text-xs uppercase tracking-wide text-black/45">
+                    {s.accountName}
+                  </div>
+                  <p className="mt-1 text-xs text-black/40">Skipped — {s.reason}</p>
+                </div>
+              ))}
+          </section>
+
+          {/* RIGHT: governance timeline */}
+          <section className="bg-white p-6 md:p-10">
+            <h2 className="mb-3 font-display text-xs uppercase tracking-[0.25em] text-black/45">
+              Governance timeline
+            </h2>
+            {!floor && (
+              <p className="font-accent text-lg italic text-black/40">
+                Every delegation, handoff, veto, escalation, and approval — with the authority rule
+                that fired — streams here as it happens.
+              </p>
+            )}
+            <ol className="space-y-3">
+              {visibleLog.map((entry) => (
+                <TimelineRow key={entry.id} entry={entry} />
+              ))}
+            </ol>
+          </section>
+        </div>
       </div>
     </div>
   );
@@ -270,41 +294,35 @@ function AccountCard({
   const needsMe = run.requiresHuman && finalDraft.status === "escalated";
 
   return (
-    <div
-      className={`rounded-lg border p-4 space-y-3 ${
-        needsMe ? "border-amber-700 bg-amber-500/5" : "border-neutral-800"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="font-medium">{account.name}</span>
+    <div className={`space-y-3 border p-4 ${needsMe ? "border-black" : "border-black/10"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-display text-sm font-bold uppercase tracking-wide">{account.name}</span>
         <div className="flex items-center gap-2">
           <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
-              account.valueTier === "high_value"
-                ? "bg-amber-500/20 text-amber-300"
-                : "bg-neutral-800 text-neutral-400"
+            className={`px-2 py-0.5 font-display text-[10px] uppercase tracking-wide ${
+              account.valueTier === "high_value" ? "bg-black text-white" : "border border-black/15 text-black/45"
             }`}
           >
             {account.valueTier === "high_value" ? "high value" : "routine"}
           </span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300">
+          <span className="border border-black/15 px-2 py-0.5 font-display text-[10px] uppercase tracking-wide text-black/60">
             {finalDraft.status.replace("_", " ")}
           </span>
         </div>
       </div>
 
-      <div className="text-xs text-neutral-500">
+      <div className="text-xs text-black/45">
         {account.city}, {account.region} · est. ${account.estValueUsd.toLocaleString()}
       </div>
 
       {/* The "why now", with receipts. */}
-      <div className="rounded-md bg-neutral-900/60 border border-neutral-800 p-3 space-y-2">
-        <div className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
+      <div className="space-y-2 border border-black/10 bg-neutral-50 p-3">
+        <div className="font-display text-[10px] uppercase tracking-wide text-black/45">
           Why now · {signal.type.replace("_", " ")} · strength {signal.strength}
         </div>
-        <p className="text-sm text-neutral-200">{signal.summary}</p>
+        <p className="text-sm text-black/80">{signal.summary}</p>
         {signal.sourceQuote && (
-          <blockquote className="text-xs italic text-neutral-500 border-l-2 border-neutral-700 pl-3">
+          <blockquote className="font-accent border-l-2 border-black/20 pl-3 text-base italic text-black/50">
             &ldquo;{signal.sourceQuote}&rdquo;
           </blockquote>
         )}
@@ -312,17 +330,17 @@ function AccountCard({
           href={signal.sourceUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-xs text-sky-400 hover:underline break-all block"
+          className="block break-all text-xs text-black/50 hover:text-black hover:underline"
         >
           {signal.sourceUrl}
         </a>
       </div>
 
       <details className="group" open={needsMe}>
-        <summary className="text-xs text-neutral-400 cursor-pointer hover:text-neutral-200">
+        <summary className="cursor-pointer font-display text-[10px] uppercase tracking-wide text-black/45 hover:text-black">
           Draft ({run.drafts.length > 1 ? `${run.drafts.length} versions — Compliance forced a revision` : "1 version"})
         </summary>
-        <pre className="whitespace-pre-wrap text-sm font-sans text-neutral-200 mt-2 rounded-md bg-neutral-900/60 border border-neutral-800 p-3">
+        <pre className="mt-2 whitespace-pre-wrap border border-black/10 bg-neutral-50 p-3 font-sans text-sm text-black/80">
           {finalDraft.body}
         </pre>
       </details>
@@ -333,20 +351,21 @@ function AccountCard({
             value={note}
             onChange={(e) => onNote(e.target.value)}
             placeholder="optional note…"
-            className="w-full rounded-md bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm outline-none focus:border-emerald-600"
+            className="w-full border border-black/15 px-3 py-1.5 text-sm outline-none transition-colors focus:border-black"
           />
           <div className="flex gap-2">
-            <button
+            <SheenButton
               onClick={() => onDecide("approve")}
               disabled={deciding || !canDecide}
-              className="flex-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium py-2 transition"
+              className="flex-1 justify-center bg-black py-2 font-display text-xs uppercase tracking-wide text-white"
+              sheenClassName="bg-white/25"
             >
               Approve &amp; send
-            </button>
+            </SheenButton>
             <button
               onClick={() => onDecide("reject")}
               disabled={deciding || !canDecide}
-              className="flex-1 rounded-md bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-sm font-medium py-2 transition"
+              className="flex-1 border border-black py-2 font-display text-xs uppercase tracking-wide transition-colors hover:bg-black hover:text-white disabled:pointer-events-none disabled:opacity-40"
             >
               Reject
             </button>
@@ -361,22 +380,24 @@ function TimelineRow({ entry }: { entry: AuditLogEntry }) {
   const meta = ACTOR_META[entry.actor];
   const badge = actionBadge(entry.action);
   return (
-    <li className="flex gap-3 rounded-lg border border-neutral-800 p-3 animate-[fadeIn_0.3s_ease-out]">
+    <li className="flex gap-3 border border-black/10 p-3 animate-[fadeIn_0.3s_ease-out]">
       <div className={`text-lg ${meta.color}`}>{meta.icon}</div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-sm font-medium ${meta.color}`}>{meta.label}</span>
-          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${badge.className}`}>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`font-display text-xs uppercase tracking-wide ${meta.color}`}>{meta.label}</span>
+          <span className={`px-1.5 py-0.5 font-display text-[10px] font-semibold uppercase tracking-wide ${badge.className}`}>
             {badge.label}
           </span>
           {entry.accountName && (
-            <span className="text-[10px] text-neutral-500">{entry.accountName}</span>
+            <span className="font-display text-[10px] uppercase tracking-wide text-black/40">
+              {entry.accountName}
+            </span>
           )}
           {entry.authorityRule && (
-            <span className="text-[10px] text-neutral-600 font-mono">{entry.authorityRule}</span>
+            <span className="font-mono text-[10px] text-black/35">{entry.authorityRule}</span>
           )}
         </div>
-        <p className="text-sm text-neutral-300 mt-1">{entry.detail}</p>
+        <p className="mt-1 text-sm text-black/70">{entry.detail}</p>
       </div>
     </li>
   );
