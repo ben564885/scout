@@ -19,6 +19,7 @@ export const integrationStatus = {
   // that the CLI picks up automatically. KYLON_WORKSPACE_API_KEY (a pak_
   // key) is the alternative for a headless deploy. See lib/kylon.ts.
   kylon: kylonConfigured(),
+  agenthog: Boolean(process.env.AGENTOS_API_KEY),
 } as const;
 
 export type IntegrationKey = keyof typeof integrationStatus;

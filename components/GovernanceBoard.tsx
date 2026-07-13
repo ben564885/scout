@@ -10,15 +10,22 @@ import { SponsorLogo } from "@/components/SponsorLogo";
 
 type IntegrationStatus = Record<"insforge" | "nimble" | "youdotcom" | "band" | "hydra" | "kylon", boolean>;
 
-const REVEAL_INTERVAL_MS = 450;
+// One FloorEvent per line (app/api/goal/route.ts) — mirrors lib/pipeline.ts's
+// exported type without importing server code into a client component.
+type FloorEvent =
+  | { type: "prospected"; floorId: string; goal: FloorRun["goal"]; live: boolean; sourceLabel: string; totalAccounts: number }
+  | { type: "run"; run: PipelineResult }
+  | { type: "skipped"; accountId: string; accountName: string; reason: string }
+  | { type: "error"; message: string };
 
 const EXAMPLE_GOAL = "Find used-car dealerships in the Bay Area worth reaching out to this week";
 
 export default function GovernanceBoard() {
   const [goal, setGoal] = useState(EXAMPLE_GOAL);
   const [floor, setFloor] = useState<FloorRun | null>(null);
-  const [visibleCount, setVisibleCount] = useState(0);
+  const [totalAccounts, setTotalAccounts] = useState(0);
   const [running, setRunning] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [integrations, setIntegrations] = useState<IntegrationStatus | null>(null);
@@ -31,41 +38,20 @@ export default function GovernanceBoard() {
       .catch(() => setIntegrations(null));
   }, []);
 
-  // Reveal the floor's work one step at a time so the human can actually watch
-  // the delegation, the veto, and the escalation happen.
-  useEffect(() => {
-    if (!floor) return;
-    if (visibleCount >= floor.auditLog.length) return;
-    const t = setTimeout(() => setVisibleCount((c) => c + 1), REVEAL_INTERVAL_MS);
-    return () => clearTimeout(t);
-  }, [floor, visibleCount]);
-
-  const visibleLog = useMemo(
-    () => (floor ? floor.auditLog.slice(0, visibleCount) : []),
-    [floor, visibleCount]
+  const awaitingApproval = useMemo(
+    () => (floor ? floor.runs.filter((r) => r.requiresHuman && r.finalDraft.status === "escalated") : []),
+    [floor]
   );
 
-  // An account's card appears the moment the Prospector hands it off.
-  const revealedAccountIds = useMemo(
-    () => new Set(visibleLog.map((e) => e.accountId).filter(Boolean) as string[]),
-    [visibleLog]
-  );
-
-  const revealDone = !!floor && visibleCount >= floor.auditLog.length;
-
-  const revealedRuns = useMemo(
-    () => (floor ? floor.runs.filter((r) => revealedAccountIds.has(r.account.id)) : []),
-    [floor, revealedAccountIds]
-  );
-
-  const awaitingApproval = revealDone
-    ? revealedRuns.filter((r) => r.requiresHuman && r.finalDraft.status === "escalated")
-    : [];
-
+  // Streams newline-delimited FloorEvents (app/api/goal/route.ts) instead of
+  // waiting for one JSON blob at the end — a 20-40 account run takes
+  // 60-90s total, and a blank screen for all of it reads as broken. Each
+  // account renders the moment its own research + draft clears.
   async function runTheFloor() {
     setRunning(true);
     setFloor(null);
-    setVisibleCount(0);
+    setTotalAccounts(0);
+    setStreamError(null);
     setNotes({});
     try {
       const res = await fetch("/api/goal", {
@@ -73,8 +59,54 @@ export default function GovernanceBoard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goal }),
       });
-      const data: FloorRun = await res.json();
-      setFloor(data);
+      if (!res.body) throw new Error("Streaming isn't supported in this browser.");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          if (!line.trim()) continue;
+
+          const event: FloorEvent = JSON.parse(line);
+          if (event.type === "prospected") {
+            setTotalAccounts(event.totalAccounts);
+            setFloor({
+              floorId: event.floorId,
+              goal: event.goal,
+              prospecting: { live: event.live, sourceLabel: event.sourceLabel },
+              runs: [],
+              skipped: [],
+              auditLog: [],
+            });
+          } else if (event.type === "run") {
+            setFloor((prev) =>
+              prev && {
+                ...prev,
+                runs: [...prev.runs, event.run],
+                auditLog: [...prev.auditLog, ...event.run.auditLog],
+              }
+            );
+          } else if (event.type === "skipped") {
+            setFloor((prev) =>
+              prev && {
+                ...prev,
+                skipped: [...prev.skipped, { accountId: event.accountId, accountName: event.accountName, reason: event.reason }],
+              }
+            );
+          } else if (event.type === "error") {
+            setStreamError(event.message);
+          }
+        }
+      }
     } finally {
       setRunning(false);
     }
@@ -114,7 +146,6 @@ export default function GovernanceBoard() {
           ),
         };
       });
-      setVisibleCount((c) => c + 1);
     } finally {
       setDeciding(null);
     }
@@ -166,16 +197,20 @@ export default function GovernanceBoard() {
 
           {floor && (
             <p className="mt-3 text-xs text-black/45">
-              Prospector built {floor.runs.length + floor.skipped.length} account
-              {floor.runs.length + floor.skipped.length === 1 ? "" : "s"} in {floor.goal.city},{" "}
+              Prospector found {totalAccounts} account{totalAccounts === 1 ? "" : "s"} in {floor.goal.city},{" "}
               {floor.goal.region} from{" "}
               <span className={floor.prospecting.live ? "text-emerald-600" : "text-black/45"}>
                 {floor.prospecting.live ? `${floor.prospecting.sourceLabel} — live web data` : floor.prospecting.sourceLabel}
               </span>
-              .
+              {running
+                ? ` — ${floor.runs.length + floor.skipped.length} of ${totalAccounts} researched so far…`
+                : `. ${floor.runs.length} run, ${floor.skipped.length} skipped.`}
             </p>
           )}
 
+          {streamError && (
+            <p className="mt-3 text-xs text-red-600">The floor hit an error mid-run: {streamError}</p>
+          )}
         </div>
 
         {/* Before there's a run to show, the pipeline flowchart fills the
@@ -200,7 +235,7 @@ export default function GovernanceBoard() {
                 </div>
               )}
 
-              {revealedRuns.map((run) => (
+              {floor.runs.map((run) => (
                 <AccountCard
                   key={run.runId}
                   run={run}
@@ -209,19 +244,17 @@ export default function GovernanceBoard() {
                   onNote={(v) => setNotes((n) => ({ ...n, [run.runId]: v }))}
                   onDecide={(d) => decide(run, d)}
                   deciding={deciding === run.runId}
-                  canDecide={revealDone}
                 />
               ))}
 
-              {revealDone &&
-                floor?.skipped.map((s) => (
-                  <div key={s.accountId} className="rounded-full border border-dashed border-black/15 px-5 py-3">
-                    <span className="font-display text-xs uppercase tracking-wide text-black/45">
-                      {s.accountName}
-                    </span>
-                    <span className="ml-2 text-xs text-black/40">Skipped — {s.reason}</span>
-                  </div>
-                ))}
+              {floor.skipped.map((s) => (
+                <div key={s.accountId} className="rounded-full border border-dashed border-black/15 px-5 py-3">
+                  <span className="font-display text-xs uppercase tracking-wide text-black/45">
+                    {s.accountName}
+                  </span>
+                  <span className="ml-2 text-xs text-black/40">Skipped — {s.reason}</span>
+                </div>
+              ))}
             </section>
 
             {/* Governance timeline — streams below the results, full width */}
@@ -230,7 +263,7 @@ export default function GovernanceBoard() {
                 Governance timeline
               </h2>
               <ol className="space-y-3">
-                {visibleLog.map((entry) => (
+                {floor.auditLog.map((entry) => (
                   <TimelineRow key={entry.id} entry={entry} />
                 ))}
               </ol>
@@ -262,7 +295,6 @@ function AccountCard({
   onNote,
   onDecide,
   deciding,
-  canDecide,
 }: {
   run: PipelineResult;
   integrations: Record<string, boolean> | null;
@@ -270,7 +302,6 @@ function AccountCard({
   onNote: (v: string) => void;
   onDecide: (d: "approve" | "reject") => void;
   deciding: boolean;
-  canDecide: boolean;
 }) {
   const { account, signal, finalDraft } = run;
   const needsMe = run.requiresHuman && finalDraft.status === "escalated";
@@ -311,7 +342,13 @@ function AccountCard({
 
       {/* The "why now", with receipts. */}
       <div className="space-y-2 rounded-xl border border-black/10 bg-neutral-50 p-4">
-        <div className="font-display text-[10px] uppercase tracking-wide text-black/45">
+        <div className="flex items-center gap-1.5 font-display text-[10px] uppercase tracking-wide text-black/45">
+          {!signal.synthetic && (
+            <StarIcon
+              className="h-3 w-3 shrink-0 text-amber-400"
+              title="Real, clickable citation — safe to open live"
+            />
+          )}
           Why now · {signal.type.replace("_", " ")} · strength {signal.strength}
         </div>
         <p className="text-sm text-black/80">{signal.summary}</p>
@@ -350,7 +387,7 @@ function AccountCard({
           <div className="flex gap-2">
             <SheenButton
               onClick={() => onDecide("approve")}
-              disabled={deciding || !canDecide}
+              disabled={deciding}
               className="flex-1 justify-center rounded-full bg-black py-2.5 font-display text-xs uppercase tracking-wide text-white"
               sheenClassName="bg-white/25"
             >
@@ -358,7 +395,7 @@ function AccountCard({
             </SheenButton>
             <button
               onClick={() => onDecide("reject")}
-              disabled={deciding || !canDecide}
+              disabled={deciding}
               className="flex-1 rounded-full border border-black py-2.5 font-display text-xs uppercase tracking-wide transition-colors hover:bg-black hover:text-white disabled:pointer-events-none disabled:opacity-40"
             >
               Reject
@@ -375,6 +412,18 @@ function GearIcon({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+// Marks a "why now" card as backed by a real, clickable citation (as opposed
+// to the floor's last-resort synthetic filler, lib/researcher.ts's
+// buildSyntheticSignal) — a live-demo safety marker, not a product feature.
+function StarIcon({ className, title }: { className?: string; title?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} role={title ? "img" : undefined}>
+      {title && <title>{title}</title>}
+      <path d="M12 2.5l2.9 6.3 6.9.7-5.2 4.6 1.6 6.8L12 17.6l-6.2 3.3 1.6-6.8-5.2-4.6 6.9-.7z" />
     </svg>
   );
 }

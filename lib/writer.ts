@@ -2,6 +2,7 @@ import { createAdminClient } from "@insforge/sdk";
 import { Account, CompanyContext, Signal } from "./types";
 import { CitedResearch } from "./youdotcom";
 import { integrationStatus } from "./env";
+import { getDefaultClient } from "./agenthog";
 
 // The Writer (PRD §5.1): drafts outreach off the exact signal, through the
 // InsForge model gateway. Falls back to the deterministic template below when
@@ -67,6 +68,9 @@ Write the email.`;
 async function generate(messages: { role: "system" | "user"; content: string }[]): Promise<string | null> {
   const db = getClient();
   if (!db) return null;
+  const system = messages.find((m) => m.role === "system")?.content ?? "";
+  const input = messages.filter((m) => m.role !== "system");
+  const startedAt = Date.now();
   try {
     const completion = await db.ai.chat.completions.create({
       model: MODEL,
@@ -74,8 +78,24 @@ async function generate(messages: { role: "system" | "user"; content: string }[]
       temperature: 0.7,
       maxTokens: 400,
     });
-    return completion.choices[0]?.message?.content?.trim() ?? null;
+    const content = completion.choices[0]?.message?.content?.trim() ?? null;
+    getDefaultClient()?.logLlmCall({
+      model: MODEL,
+      system,
+      input,
+      output: content ? [{ role: "assistant", content }] : [],
+      durationMs: Date.now() - startedAt,
+      finishReason: content ? "stop" : "empty",
+    });
+    return content;
   } catch (error) {
+    getDefaultClient()?.logLlmCall({
+      model: MODEL,
+      system,
+      input,
+      durationMs: Date.now() - startedAt,
+      error: { message: error instanceof Error ? error.message : String(error) },
+    });
     console.warn("[insforge:ai] draft generation failed (falling back to template):", error);
     return null;
   }

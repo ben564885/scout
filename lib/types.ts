@@ -38,6 +38,13 @@ export type Signal = {
   sourceUrl: string;
   sourceQuote: string;
   detectedAt: string;
+  // Set only on the floor's last-resort quota filler (lib/pipeline.ts,
+  // buildSyntheticSignal in lib/researcher.ts) — an account with genuinely no
+  // real review data at all, used to hit the run's minimum valid-signal
+  // count. Every other signal (strict or the weaker real-data fallbacks) has
+  // this unset. The UI uses it to mark which "why now" cards are backed by a
+  // real, clickable citation versus demo filler.
+  synthetic?: boolean;
 };
 
 export type DraftStatus =

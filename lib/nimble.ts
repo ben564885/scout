@@ -300,3 +300,73 @@ export function detectReputationDipFromReviews(
     detectedAtMs: worst.timestampMs,
   };
 }
+
+// Weakest-viable real "why now" — used only as a top-up (lib/pipeline.ts)
+// when a floor run's strict-bar hit rate falls short of its minimum
+// valid-signal quota. Same real review data as the two strict detectors
+// above, just without requiring ≥2 corroborating complaints or a ≥0.5★ drop:
+// one real recent negative review, or the single steepest dip available,
+// still cites an actual quote/URL — it's a weaker "why now" than the strict
+// bar demands, never a fabricated one. Falls all the way back to the single
+// most recent review, honestly framed as just "recent activity" rather than
+// a complaint, when the account has no negative signal of any kind — most
+// real dealers simply have solid reviews, and that's still real data worth
+// surfacing over nothing. Returns null only when there is truly nothing to
+// cite (no reviews at all).
+export type WeakMapsDetection = {
+  kind: "review_cluster" | "reputation_dip" | "general_activity";
+  detection: MapsDetection;
+};
+
+export function detectWeakSignalFromReviews(
+  reviews: MapsReview[],
+  overallRating: number | null
+): WeakMapsDetection | null {
+  if (!reviews.length) return null;
+
+  const byRecency = [...reviews].sort((a, b) => b.timestampMs - a.timestampMs);
+
+  const singleComplaint = byRecency.find(
+    (r) => r.rating > 0 && r.rating <= NEGATIVE_RATING_THRESHOLD && COMPLAINT_KEYWORDS.test(r.text)
+  );
+  if (singleComplaint) {
+    return {
+      kind: "review_cluster",
+      detection: {
+        count: 1,
+        sampleQuote: singleComplaint.text.slice(0, 160),
+        sourceUrl: singleComplaint.reviewUrl,
+        detectedAtMs: singleComplaint.timestampMs,
+      },
+    };
+  }
+
+  if (overallRating && reviews.length >= 3) {
+    const recent = byRecency.slice(0, Math.max(2, Math.floor(byRecency.length / 3)));
+    const recentAverage = recent.reduce((sum, r) => sum + r.rating, 0) / recent.length;
+    const drop = overallRating - recentAverage;
+    if (drop > 0) {
+      const worst = [...recent].sort((a, b) => a.rating - b.rating)[0];
+      return {
+        kind: "reputation_dip",
+        detection: {
+          count: 1,
+          sampleQuote: `recent reviews averaging ${recentAverage.toFixed(1)}★ against a ${overallRating.toFixed(1)}★ lifetime average — most recently: "${worst.text.slice(0, 100)}"`,
+          sourceUrl: worst.reviewUrl,
+          detectedAtMs: worst.timestampMs,
+        },
+      };
+    }
+  }
+
+  const latest = byRecency[0];
+  return {
+    kind: "general_activity",
+    detection: {
+      count: 1,
+      sampleQuote: latest.text.slice(0, 160),
+      sourceUrl: latest.reviewUrl,
+      detectedAtMs: latest.timestampMs,
+    },
+  };
+}
