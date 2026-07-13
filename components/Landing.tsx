@@ -1,28 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { HeroArt, ProblemIllustration } from "./landing/IsoArt";
+import { ProblemIllustration } from "./landing/IsoArt";
 
 const NAV_LINKS = ["Problem", "Product", "Pricing", "About", "Contact"];
 
 const TRUSTED_BY = ["northpoint", "VANTAGE", "brightline", "ANCHOR", "Loop&Co"];
-
-const SLIDE_MS = 5000;
-
-const HERO_SLIDES = [
-  {
-    title: "Signal Blind Spots",
-    body: "Reviews, hiring pages, and local news bury the buying signals that matter most.",
-  },
-  {
-    title: "Manual Research Drag",
-    body: "Reps burn hours qualifying a single account before writing one email.",
-  },
-  {
-    title: "Governance At Scale",
-    body: "Every draft is checked against compliance policy before a human ever sees it.",
-  },
-];
 
 const PROBLEM_CARDS: {
   variant: "converge" | "stack" | "bounce" | "gate";
@@ -58,16 +41,6 @@ function LogoMark() {
       <rect x="4" y="4" width="10" height="10" fill="white" />
       <rect x="18" y="18" width="10" height="10" fill="white" />
     </svg>
-  );
-}
-
-function DiamondGrid() {
-  return (
-    <div className="grid grid-cols-3 gap-1 opacity-80">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <span key={i} className="h-1.5 w-1.5 rotate-45 bg-white" />
-      ))}
-    </div>
   );
 }
 
@@ -165,21 +138,12 @@ function ProblemCard({
 }
 
 export default function Landing() {
-  const [slide, setSlide] = useState(0);
   const [mounted, setMounted] = useState(false);
-  const active = HERO_SLIDES[slide];
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(frame);
   }, []);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setSlide((s) => (s + 1) % HERO_SLIDES.length);
-    }, SLIDE_MS);
-    return () => clearInterval(id);
-  }, [slide]);
 
   return (
     <div className="overflow-x-hidden bg-white text-black">
@@ -256,46 +220,9 @@ export default function Landing() {
 
         {/* Hero — right (photo panel) */}
         <div
-          className="relative min-h-[520px] overflow-hidden bg-cover bg-center"
+          className="min-h-[520px] bg-cover bg-center"
           style={{ backgroundImage: "url(/cloudBg.jpg)" }}
-        >
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(6,12,28,0.15)_0%,rgba(6,12,28,0.05)_40%,rgba(6,12,28,0.55)_100%)]" />
-
-          <div className="absolute inset-0">
-            <HeroArt />
-          </div>
-
-          <div key={`overlay-${slide}`} className="absolute bottom-6 left-6 max-w-[260px] animate-[fadeUp_0.5s_ease_both] border border-white/20 bg-white/10 p-5 backdrop-blur-sm">
-            <DiamondGrid />
-            <h3 className="mt-3 font-display text-sm font-bold uppercase tracking-wide text-white">
-              {active.title}
-            </h3>
-            <p className="mt-2 text-xs leading-relaxed text-white/70">{active.body}</p>
-          </div>
-
-          <div className="absolute bottom-20 right-6 h-[2px] w-16 overflow-hidden bg-white/20">
-            <div key={slide} className="h-full bg-white" style={{ animation: `barGrow ${SLIDE_MS}ms linear forwards` }} />
-          </div>
-
-          <div className="absolute bottom-6 right-6 flex gap-2">
-            <button
-              type="button"
-              aria-label="Previous"
-              onClick={() => setSlide((s) => (s - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)}
-              className="flex h-9 w-9 items-center justify-center border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20"
-            >
-              ←
-            </button>
-            <button
-              type="button"
-              aria-label="Next"
-              onClick={() => setSlide((s) => (s + 1) % HERO_SLIDES.length)}
-              className="flex h-9 w-9 items-center justify-center border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20"
-            >
-              →
-            </button>
-          </div>
-        </div>
+        />
       </div>
 
       {/* The Problem bar */}
