@@ -109,7 +109,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             aria-label="Close"
             className="flex h-8 w-8 shrink-0 items-center justify-center border border-black/15 text-black/50 transition-colors hover:border-black hover:text-black"
           >
-            ✕
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
           </button>
         </div>
 

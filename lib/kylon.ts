@@ -117,23 +117,23 @@ export async function mirrorRunToKylon(result: PipelineResult): Promise<void> {
   const { account, signal, finalDraft } = result;
 
   const rootId = await createThread(
-    `🚗 **${account.name}** (${account.city}, ${account.region} · est. $${account.estValueUsd.toLocaleString()}, ${account.valueTier.replace("_", " ")})\n\n` +
+    `**${account.name}** (${account.city}, ${account.region} · est. $${account.estValueUsd.toLocaleString()}, ${account.valueTier.replace("_", " ")})\n\n` +
       `Prospector → Researcher: "${signal.summary}"\nSource: ${signal.sourceUrl}`
   );
   if (!rootId) return;
   runThreads.set(result.runId, rootId);
 
-  await replyThread(rootId, `✍️ Writer drafted outreach off this signal:\n\n${finalDraft.body}`);
+  await replyThread(rootId, `Writer drafted outreach off this signal:\n\n${finalDraft.body}`);
 
   if (result.requiresHuman) {
     await replyThread(
       rootId,
-      `🔺 Manager escalated this account for approval — Manager cannot approve high-value accounts on its own authority. Routed to the human via Band; awaiting a decision.`
+      `Manager escalated this account for approval — Manager cannot approve high-value accounts on its own authority. Routed to the human via Band; awaiting a decision.`
     );
   } else {
     await replyThread(
       rootId,
-      `✅ Manager auto-approved — routine tier, within its authority. No human review required.`
+      `Manager auto-approved — routine tier, within its authority. No human review required.`
     );
   }
 }
@@ -145,7 +145,7 @@ export async function mirrorApprovalToKylon(runId: string, detail: string): Prom
   if (!kylonConfigured()) return;
   const rootId = runThreads.get(runId);
   if (!rootId) return;
-  await replyThread(rootId, `👤 ${detail}`);
+  await replyThread(rootId, detail);
 }
 
 // Posted once per floor run (PRD Beat 1: "give the floor a goal"), before any
@@ -153,6 +153,6 @@ export async function mirrorApprovalToKylon(runId: string, detail: string): Prom
 export async function announceFloorGoal(goal: string, sourceLabel: string, live: boolean): Promise<void> {
   if (!kylonConfigured()) return;
   await postMessage(
-    `🎯 New goal: "${goal}"\n\nProspector is building the account list${live ? ` from ${sourceLabel} (live)` : ` — falling back to ${sourceLabel}`}...`
+    `New goal: "${goal}"\n\nProspector is building the account list${live ? ` from ${sourceLabel} (live)` : ` — falling back to ${sourceLabel}`}...`
   );
 }

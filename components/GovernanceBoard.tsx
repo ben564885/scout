@@ -312,7 +312,7 @@ function AccountCard({
         </div>
         <p className="text-sm text-black/80">{signal.summary}</p>
         {signal.sourceQuote && (
-          <blockquote className="font-accent border-l-2 border-black/20 pl-3 text-base italic text-black/50">
+          <blockquote className="border-l-2 border-black/20 pl-3 text-sm text-black/60">
             &ldquo;{signal.sourceQuote}&rdquo;
           </blockquote>
         )}
@@ -399,7 +399,9 @@ function TimelineRow({ entry }: { entry: AuditLogEntry }) {
   const badge = actionBadge(entry.action);
   return (
     <li className="flex gap-3 rounded-xl border border-black/10 p-3 animate-[fadeIn_0.3s_ease-out]">
-      <div className={`text-lg ${meta.color}`}>{meta.icon}</div>
+      <div className={`flex h-5 w-5 shrink-0 items-center justify-center ${meta.color}`}>
+        <meta.icon className="h-4 w-4" />
+      </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`font-display text-xs uppercase tracking-wide ${meta.color}`}>{meta.label}</span>
