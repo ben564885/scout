@@ -6,6 +6,7 @@ import { ACTOR_META, actionBadge } from "@/lib/actor-meta";
 import { LogoMark, SheenButton } from "@/components/Brand";
 import SettingsModal from "@/components/SettingsModal";
 import PipelineFlow from "@/components/PipelineFlow";
+import { SponsorLogo } from "@/components/SponsorLogo";
 
 type IntegrationStatus = Record<"insforge" | "nimble" | "youdotcom" | "band" | "hydra" | "kylon", boolean>;
 
@@ -192,68 +193,67 @@ export default function GovernanceBoard() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-px bg-black/10 lg:grid-cols-2">
-          {/* LEFT: the work — accounts, cited signals, drafts */}
-          <section className="space-y-4 bg-white p-6 md:p-10">
-            <h2 className="font-display text-xs uppercase tracking-[0.25em] text-black/45">The work</h2>
+        {/* The work — accounts, cited signals, drafts, one full-width pill each */}
+        <section className="space-y-4 border-b border-black/10 bg-white p-6 md:p-10">
+          <h2 className="font-display text-xs uppercase tracking-[0.25em] text-black/45">The work</h2>
 
-            {!floor && (
-              <p className="font-accent text-lg italic text-black/40">
-                State an outcome. The floor finds the accounts, cites a reason to reach out, drafts
-                the outreach, and brings you only what needs your judgment.
+          {!floor && (
+            <p className="font-accent text-lg italic text-black/40">
+              State an outcome. The floor finds the accounts, cites a reason to reach out, drafts
+              the outreach, and brings you only what needs your judgment.
+            </p>
+          )}
+
+          {awaitingApproval.length > 0 && (
+            <div className="rounded-2xl border border-black bg-amber-50 p-4">
+              <p className="font-display text-xs uppercase tracking-wide text-black">
+                {awaitingApproval.length} account{awaitingApproval.length === 1 ? "" : "s"} escalated
+                to you — the Manager has no authority to send these.
               </p>
-            )}
+            </div>
+          )}
 
-            {awaitingApproval.length > 0 && (
-              <div className="rounded-2xl border border-black bg-amber-50 p-4">
-                <p className="font-display text-xs uppercase tracking-wide text-black">
-                  {awaitingApproval.length} account{awaitingApproval.length === 1 ? "" : "s"} escalated
-                  to you — the Manager has no authority to send these.
-                </p>
+          {revealedRuns.map((run) => (
+            <AccountCard
+              key={run.runId}
+              run={run}
+              integrations={integrations}
+              note={notes[run.runId] ?? ""}
+              onNote={(v) => setNotes((n) => ({ ...n, [run.runId]: v }))}
+              onDecide={(d) => decide(run, d)}
+              deciding={deciding === run.runId}
+              canDecide={revealDone}
+            />
+          ))}
+
+          {revealDone &&
+            floor?.skipped.map((s) => (
+              <div key={s.accountId} className="rounded-full border border-dashed border-black/15 px-5 py-3">
+                <span className="font-display text-xs uppercase tracking-wide text-black/45">
+                  {s.accountName}
+                </span>
+                <span className="ml-2 text-xs text-black/40">Skipped — {s.reason}</span>
               </div>
-            )}
-
-            {revealedRuns.map((run) => (
-              <AccountCard
-                key={run.runId}
-                run={run}
-                note={notes[run.runId] ?? ""}
-                onNote={(v) => setNotes((n) => ({ ...n, [run.runId]: v }))}
-                onDecide={(d) => decide(run, d)}
-                deciding={deciding === run.runId}
-                canDecide={revealDone}
-              />
             ))}
+        </section>
 
-            {revealDone &&
-              floor?.skipped.map((s) => (
-                <div key={s.accountId} className="rounded-2xl border border-dashed border-black/15 p-4">
-                  <div className="font-display text-xs uppercase tracking-wide text-black/45">
-                    {s.accountName}
-                  </div>
-                  <p className="mt-1 text-xs text-black/40">Skipped — {s.reason}</p>
-                </div>
-              ))}
-          </section>
-
-          {/* RIGHT: governance timeline */}
-          <section className="bg-white p-6 md:p-10">
-            <h2 className="mb-3 font-display text-xs uppercase tracking-[0.25em] text-black/45">
-              Governance timeline
-            </h2>
-            {!floor && (
-              <p className="font-accent text-lg italic text-black/40">
-                Every delegation, handoff, veto, escalation, and approval — with the authority rule
-                that fired — streams here as it happens.
-              </p>
-            )}
-            <ol className="space-y-3">
-              {visibleLog.map((entry) => (
-                <TimelineRow key={entry.id} entry={entry} />
-              ))}
-            </ol>
-          </section>
-        </div>
+        {/* Governance timeline — streams below the results, full width */}
+        <section className="bg-white p-6 md:p-10">
+          <h2 className="mb-3 font-display text-xs uppercase tracking-[0.25em] text-black/45">
+            Governance timeline
+          </h2>
+          {!floor && (
+            <p className="font-accent text-lg italic text-black/40">
+              Every delegation, handoff, veto, escalation, and approval — with the authority rule
+              that fired — streams here as it happens.
+            </p>
+          )}
+          <ol className="space-y-3">
+            {visibleLog.map((entry) => (
+              <TimelineRow key={entry.id} entry={entry} />
+            ))}
+          </ol>
+        </section>
       </div>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
@@ -261,8 +261,20 @@ export default function GovernanceBoard() {
   );
 }
 
+// Which sponsors actually did work on this result, so every pill can show
+// its own receipts instead of one static logo strip for the whole floor.
+// Nimble/Band/InsForge are the backbone of every run; You.com only lit up
+// if the Researcher's audit trail shows it was actually called.
+const SPONSOR_ICONS: Record<string, { src: string; alt: string; fit?: "cover" | "contain" }> = {
+  nimble: { src: "/nimble.svg", alt: "Nimble", fit: "contain" },
+  youdotcom: { src: "/you.jpg", alt: "You.com" },
+  band: { src: "/band.svg", alt: "Band", fit: "contain" },
+  insforge: { src: "/insforge.png", alt: "InsForge" },
+};
+
 function AccountCard({
   run,
+  integrations,
   note,
   onNote,
   onDecide,
@@ -270,6 +282,7 @@ function AccountCard({
   canDecide,
 }: {
   run: PipelineResult;
+  integrations: Record<string, boolean> | null;
   note: string;
   onNote: (v: string) => void;
   onDecide: (d: "approve" | "reject") => void;
@@ -279,26 +292,34 @@ function AccountCard({
   const { account, signal, finalDraft } = run;
   const needsMe = run.requiresHuman && finalDraft.status === "escalated";
 
+  const usedYouCom = run.auditLog.some((e) => e.authorityRule === "researcher:supplement_with_youdotcom");
+  const sponsorKeys = ["nimble", ...(usedYouCom ? ["youdotcom"] : []), "band", "insforge"];
+
   return (
     <div
-      className={`space-y-3 rounded-2xl border p-5 transition-colors ${
+      className={`space-y-3 rounded-[28px] border bg-white p-5 transition-colors md:p-6 ${
         needsMe ? "border-black shadow-[0_1px_0_0_rgba(0,0,0,0.05)]" : "border-black/10"
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="font-display text-sm font-bold uppercase tracking-wide">{account.name}</span>
-        <div className="flex items-center gap-2">
-          <span
-            className={`rounded-full px-3 py-1 font-display text-[10px] uppercase tracking-wide ${
-              account.valueTier === "high_value" ? "bg-black text-white" : "border border-black/15 text-black/45"
-            }`}
-          >
-            {account.valueTier === "high_value" ? "high value" : "routine"}
-          </span>
-          <span className="rounded-full border border-black/15 px-3 py-1 font-display text-[10px] uppercase tracking-wide text-black/60">
-            {finalDraft.status.replace("_", " ")}
-          </span>
-        </div>
+        <span
+          className={`rounded-full px-3 py-1 font-display text-[10px] uppercase tracking-wide ${
+            account.valueTier === "high_value" ? "bg-black text-white" : "border border-black/15 text-black/45"
+          }`}
+        >
+          {account.valueTier === "high_value" ? "high value" : "routine"}
+        </span>
+        <span className="rounded-full border border-black/15 px-3 py-1 font-display text-[10px] uppercase tracking-wide text-black/60">
+          {finalDraft.status.replace("_", " ")}
+        </span>
+        <span className="ml-auto flex items-center gap-1">
+          {sponsorKeys.map((key) => {
+            const icon = SPONSOR_ICONS[key];
+            const live = integrations?.[key] !== false;
+            return <SponsorLogo key={key} src={icon.src} alt={icon.alt} fit={icon.fit} live={live} size={24} />;
+          })}
+        </span>
       </div>
 
       <div className="text-xs text-black/45">
