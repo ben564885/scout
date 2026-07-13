@@ -176,18 +176,6 @@ export default function GovernanceBoard() {
             </p>
           )}
 
-          {floor && revealDone && (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatPill label="Accounts run" value={floor.runs.length} />
-              <StatPill label="Auto-approved" value={floor.runs.filter((r) => !r.requiresHuman).length} />
-              <StatPill
-                label="Escalated"
-                value={floor.runs.filter((r) => r.requiresHuman).length}
-                highlight={awaitingApproval.length > 0}
-              />
-              <StatPill label="Skipped" value={floor.skipped.length} />
-            </div>
-          )}
         </div>
 
         {/* Before there's a run to show, the pipeline flowchart fills the
@@ -378,25 +366,6 @@ function AccountCard({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function StatPill({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
-  return (
-    <div
-      className={`rounded-2xl border px-4 py-3 transition-colors ${
-        highlight ? "border-black bg-black text-white" : "border-black/15 text-black"
-      }`}
-    >
-      <div className="font-display text-2xl font-bold tabular-nums">{value}</div>
-      <div
-        className={`mt-0.5 font-display text-[10px] uppercase tracking-wide ${
-          highlight ? "text-white/60" : "text-black/45"
-        }`}
-      >
-        {label}
-      </div>
     </div>
   );
 }
