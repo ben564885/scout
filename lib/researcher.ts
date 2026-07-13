@@ -56,9 +56,17 @@ export async function gatherSignal(
   const candidates: Signal[] = [];
 
   if (integrationStatus.nimble) {
-    for (const source of DEALER_SOURCES) {
-      const url = source.url(account);
-      const markdown = await extractPage(url);
+    // Sources are independent reads — walk them concurrently instead of
+    // sequentially so one account's research doesn't cost 5x an extract call.
+    const pulls = await Promise.all(
+      DEALER_SOURCES.map(async (source) => {
+        const url = source.url(account);
+        const markdown = await extractPage(url);
+        return { source, url, markdown };
+      })
+    );
+
+    for (const { source, url, markdown } of pulls) {
       sourcesChecked.push(source.label);
       if (!markdown) continue;
 

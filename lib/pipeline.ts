@@ -196,12 +196,21 @@ export async function runFloor(goal: string): Promise<FloorRun> {
   const runs: PipelineResult[] = [];
   const skipped: FloorRun["skipped"] = [];
 
-  for (const account of accounts) {
-    // Mock accounts carry a curated signal; live-prospected ones don't, so the
-    // Researcher has to actually find one. No signal, no outreach.
-    const fallback = fallbackSignalFor(account.id);
-    const { signal, youCitation, sourcesChecked } = await gatherSignal(account, fallback);
+  // Researching each account is an independent batch of network calls (up to
+  // 5 Nimble pulls + a You.com call apiece) — run them concurrently instead
+  // of one account at a time, or the floor's latency scales linearly with
+  // account count and blows past the route's maxDuration.
+  const researched = await Promise.all(
+    accounts.map(async (account) => {
+      // Mock accounts carry a curated signal; live-prospected ones don't, so
+      // the Researcher has to actually find one. No signal, no outreach.
+      const fallback = fallbackSignalFor(account.id);
+      const result = await gatherSignal(account, fallback);
+      return { account, ...result };
+    })
+  );
 
+  for (const { account, signal, youCitation, sourcesChecked } of researched) {
     if (!signal) {
       skipped.push({
         accountId: account.id,

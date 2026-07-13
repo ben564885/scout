@@ -18,13 +18,22 @@ function getClient(): Nimble | null {
   return client;
 }
 
+// The SDK defaults to a 3-minute per-request timeout with 2 retries, which on
+// its own can exceed this route's whole maxDuration. Cap each call at 20s and
+// don't retry — callers already fall back to mock data on a null return, so a
+// fast failure here is strictly better than a slow one.
+const EXTRACT_TIMEOUT_MS = 20_000;
+
 export async function extractPage(url: string): Promise<string | null> {
   const nimble = getClient();
   if (!nimble) return null;
   try {
     // `formats: ["markdown"]` is required — omitting it returns only `html`
     // (confirmed against the live API; the README's inline example omits it).
-    const response = await nimble.extract({ url, render: true, formats: ["markdown"] });
+    const response = await nimble.extract(
+      { url, render: true, formats: ["markdown"] },
+      { timeout: EXTRACT_TIMEOUT_MS, maxRetries: 0 }
+    );
     return response.data?.markdown ?? null;
   } catch (error) {
     console.warn(`[nimble] extract failed for ${url} (falling back to mock):`, error);
