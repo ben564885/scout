@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AuditLogEntry, Draft, FloorRun, PipelineResult } from "@/lib/types";
 import { ACTOR_META, actionBadge } from "@/lib/actor-meta";
 import { LogoMark, SheenButton } from "@/components/Brand";
+import SettingsModal from "@/components/SettingsModal";
 
 type IntegrationStatus = Record<"insforge" | "nimble" | "youdotcom" | "band" | "hydra" | "kylon", boolean>;
 
@@ -28,6 +29,7 @@ export default function GovernanceBoard() {
   const [deciding, setDeciding] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [integrations, setIntegrations] = useState<IntegrationStatus | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/status")
@@ -134,14 +136,14 @@ export default function GovernanceBoard() {
           <span className="font-display text-lg font-bold tracking-tight">scout.</span>
         </div>
         <div className="flex items-center justify-end bg-white px-6 py-4 md:px-10">
-          <a
-            href="/settings"
+          <button
+            onClick={() => setSettingsOpen(true)}
             aria-label="Settings"
             title="Settings"
             className="flex h-9 w-9 items-center justify-center border border-black transition-colors hover:bg-black hover:text-white"
           >
             <GearIcon className="h-4 w-4" />
-          </a>
+          </button>
         </div>
       </div>
 
@@ -270,6 +272,8 @@ export default function GovernanceBoard() {
           </section>
         </div>
       </div>
+
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
