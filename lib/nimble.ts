@@ -77,12 +77,12 @@ export type MapsReview = {
 
 const AGENT_TIMEOUT_MS = 25_000;
 
-export async function searchDealerPlaces(query: string): Promise<MapsPlace[] | null> {
+export async function searchDealerPlaces(query: string, page?: number): Promise<MapsPlace[] | null> {
   const nimble = getClient();
   if (!nimble) return null;
   try {
     const result = await nimble.agent.run(
-      { agent: "google_maps_search", params: { query } },
+      { agent: "google_maps_search", params: page ? { query, page } : { query } },
       { timeout: AGENT_TIMEOUT_MS, maxRetries: 0 }
     );
     // `data.parsing` is typed as a success/error union; narrow it ourselves

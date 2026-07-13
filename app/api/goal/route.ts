@@ -9,7 +9,11 @@ import { announceFloorGoal, mirrorRunToKylon } from "@/lib/kylon";
 // drafts, Compliance vets, Manager approves or escalates. No step-by-step
 // driving. That's the difference between an AI employee and a tool.
 
-export const maxDuration = 120; // live Nimble + You.com pulls across several accounts
+// Live Nimble + You.com pulls across a 20-40 account floor run (up from a
+// fixed 3) — measured ~75s locally at RESEARCH_CONCURRENCY=12, so 180s
+// leaves real headroom for a slower live pull without a hard-coded 120s
+// ceiling cutting the run off mid-research.
+export const maxDuration = 180;
 
 export async function POST(req: NextRequest) {
   const { goal } = await req.json();

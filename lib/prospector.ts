@@ -149,7 +149,14 @@ function rank(accounts: Account[]): Account[] {
   return [...accounts].sort((a, b) => b.estValueUsd - a.estValueUsd);
 }
 
-export async function prospect(rawGoal: string, limit = 3): Promise<ProspectResult> {
+// A single google_maps_search call tops out around ~20 results (Google's
+// local pack, not a paginated API). PROSPECT_LIMIT is the ceiling we rank
+// down to, not a target to hit exactly — see the two-pull merge below for how
+// we get a real 20-40-account candidate pool instead of settling for one
+// page's worth.
+const PROSPECT_LIMIT = 40;
+
+export async function prospect(rawGoal: string, limit = PROSPECT_LIMIT): Promise<ProspectResult> {
   const goal = parseGoal(rawGoal);
 
   if (integrationStatus.nimble) {
@@ -157,8 +164,18 @@ export async function prospect(rawGoal: string, limit = 3): Promise<ProspectResu
     // with a place_id, phone number, and rating — no markdown scraping or
     // regex needed to build the list. Falls through to the directory scrape
     // below only if Maps comes back empty (e.g. an obscure city).
-    const places = await searchDealerPlaces(`used car dealerships in ${goal.city}, ${goal.region}`);
-    if (places && places.length >= 2) {
+    const query = `used car dealerships in ${goal.city}, ${goal.region}`;
+    // One pull returns ~20 places; Google's local pack reshuffles enough
+    // between calls (confirmed live) that a second concurrent pull nets a
+    // materially different set — merging the two by place_id routinely lands
+    // 25-35 unique dealers instead of capping the whole floor run at one
+    // page's worth of candidates.
+    const [page1, page2] = await Promise.all([searchDealerPlaces(query), searchDealerPlaces(query, 2)]);
+    const byPlaceId = new Map<string, MapsPlace>();
+    for (const place of [...(page1 ?? []), ...(page2 ?? [])]) byPlaceId.set(place.placeId, place);
+    const places = [...byPlaceId.values()];
+
+    if (places.length >= 2) {
       const accounts = places.map((place) => accountFromPlace(place, goal));
       return {
         goal,

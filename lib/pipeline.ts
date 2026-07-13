@@ -204,6 +204,33 @@ export async function runPipeline(
 // clicking. This is the "AI employee, not a tool" test: the human states an
 // outcome and reviews finished work, they do not drive each step.
 
+// Runs `fn` over `items` with at most `concurrency` in flight at once,
+// preserving input order in the returned array. A floor run now prospects
+// 20-40 accounts instead of 3, and each account's research is itself several
+// Nimble calls — firing everything via a single Promise.all would mean
+// 100+ simultaneous requests against APIs with real rate limits (Nimble
+// documents 429 RateLimitError). A small worker pool keeps throughput high
+// without hammering either API.
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return results;
+}
+
+const RESEARCH_CONCURRENCY = 12; // caps concurrent Nimble calls during research
+const WRITER_CONCURRENCY = 4; // caps concurrent Writer/Compliance/Manager (model gateway) calls
+
 export async function runFloor(goal: string): Promise<FloorRun> {
   const floorId = nextId("floor");
   const { goal: parsed, accounts, live, sourceLabel } = await prospect(goal);
@@ -215,22 +242,22 @@ export async function runFloor(goal: string): Promise<FloorRun> {
   const fetchedContext = await getCompanyContext().catch(() => null);
   const companyContext = fetchedContext?.content.trim() ? fetchedContext : null;
 
-  const runs: PipelineResult[] = [];
   const skipped: FloorRun["skipped"] = [];
 
-  // Researching each account is an independent batch of network calls (up to
-  // 5 Nimble pulls + a You.com call apiece) — run them concurrently instead
-  // of one account at a time, or the floor's latency scales linearly with
-  // account count and blows past the route's maxDuration.
-  const researched = await Promise.all(
-    accounts.map(async (account) => {
-      // Mock accounts carry a curated signal; live-prospected ones don't, so
-      // the Researcher has to actually find one. No signal, no outreach.
-      const fallback = fallbackSignalFor(account.id);
-      const result = await gatherSignal(account, fallback);
-      return { account, ...result };
-    })
-  );
+  const researched = await mapWithConcurrency(accounts, RESEARCH_CONCURRENCY, async (account) => {
+    // Mock accounts carry a curated signal; live-prospected ones don't, so
+    // the Researcher has to actually find one. No signal, no outreach.
+    const fallback = fallbackSignalFor(account.id);
+    const result = await gatherSignal(account, fallback);
+    return { account, ...result };
+  });
+
+  const signaled: {
+    account: Account;
+    signal: Signal;
+    youCitation: CitedResearch | null;
+    sourcesChecked: string[];
+  }[] = [];
 
   for (const { account, signal, youCitation, sourcesChecked } of researched) {
     if (!signal) {
@@ -241,9 +268,12 @@ export async function runFloor(goal: string): Promise<FloorRun> {
       });
       continue;
     }
-
-    runs.push(await runPipeline(account, signal, youCitation, sourcesChecked, companyContext));
+    signaled.push({ account, signal, youCitation, sourcesChecked });
   }
+
+  const runs = await mapWithConcurrency(signaled, WRITER_CONCURRENCY, ({ account, signal, youCitation, sourcesChecked }) =>
+    runPipeline(account, signal, youCitation, sourcesChecked, companyContext)
+  );
 
   const auditLog = runs.flatMap((run) => run.auditLog);
 

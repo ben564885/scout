@@ -106,7 +106,11 @@ export default function PipelineFlow({
   running: boolean;
 }) {
   const row1 = FLOW.slice(0, ROW_SIZE);
-  const row2 = FLOW.slice(ROW_SIZE);
+  // Flow order is [youdotcom, insforge, hydra]; reversed gives the
+  // left-to-right *visual* order (Memory ... Cited research) so it can share
+  // row1's column grid directly instead of relying on flex-row-reverse.
+  const row2 = [...FLOW.slice(ROW_SIZE)].reverse();
+  const emptyCols = ROW_SIZE - row2.length;
 
   const isLive = (node: FlowNode) =>
     node.key === "rocketride" ? true : integrations?.[node.key as IntegrationKey] !== false;
@@ -131,19 +135,29 @@ export default function PipelineFlow({
           ))}
         </div>
 
-        <div className="flex justify-end">
-          <DownArrow active={running} />
+        <div className="flex items-start gap-2 sm:gap-4">
+          {Array.from({ length: ROW_SIZE - 1 }).map((_, i) => (
+            <div key={`down-spacer-${i}`} className="flex-1" />
+          ))}
+          <div className="flex flex-1 items-start">
+            <div className="flex w-[120px] shrink-0 justify-center sm:w-[152px]">
+              <DownArrow active={running} />
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-row-reverse items-start gap-2 sm:gap-4">
+        <div className="flex items-start gap-2 sm:gap-4">
+          {Array.from({ length: emptyCols }).map((_, i) => (
+            <div key={`row2-spacer-${i}`} className="flex-1" />
+          ))}
           {row2.map((node, i) => (
             <div key={node.key} className="flex flex-1 items-start">
+              <FlowNodeCell node={node} live={isLive(node)} />
               {i < row2.length - 1 && (
                 <div className="mt-11 flex flex-1 items-center text-black/25">
                   <FlowArrow active={running} flip />
                 </div>
               )}
-              <FlowNodeCell node={node} live={isLive(node)} />
             </div>
           ))}
         </div>
