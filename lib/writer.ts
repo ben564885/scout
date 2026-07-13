@@ -1,5 +1,5 @@
 import { createAdminClient } from "@insforge/sdk";
-import { Account, Signal } from "./types";
+import { Account, CompanyContext, Signal } from "./types";
 import { CitedResearch } from "./youdotcom";
 import { integrationStatus } from "./env";
 
@@ -38,11 +38,20 @@ Hard rules:
 - Under 120 words. No subject line. No placeholders like {FirstName}. Plain text.
 - Sign off as "— Scout".`;
 
-function userPrompt(account: Account, signal: Signal, youCitation: CitedResearch | null): string {
+function userPrompt(
+  account: Account,
+  signal: Signal,
+  youCitation: CitedResearch | null,
+  companyContext: CompanyContext | null
+): string {
   const research = youCitation
     ? `\n\nAdditional cited research:\n${youCitation.content.slice(0, 800)}\nSources: ${youCitation.sources
         .map((s) => s.url)
         .join(", ")}`
+    : "";
+
+  const sender = companyContext
+    ? `\n\nWho you're writing on behalf of (ground the offer/positioning in this — do not claim capabilities it doesn't support):\n${companyContext.content.slice(0, 1000)}`
     : "";
 
   return `Dealership: ${account.name} (${account.city}, ${account.region})
@@ -50,7 +59,7 @@ function userPrompt(account: Account, signal: Signal, youCitation: CitedResearch
 Signal type: ${signal.type}
 What we found: ${signal.summary}
 Verbatim source quote: "${signal.sourceQuote}"
-Source: ${signal.sourceUrl}${research}
+Source: ${signal.sourceUrl}${research}${sender}
 
 Write the email.`;
 }
@@ -75,11 +84,12 @@ async function generate(messages: { role: "system" | "user"; content: string }[]
 export async function draftOutreach(
   account: Account,
   signal: Signal,
-  youCitation: CitedResearch | null = null
+  youCitation: CitedResearch | null = null,
+  companyContext: CompanyContext | null = null
 ): Promise<string> {
   const generated = await generate([
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: userPrompt(account, signal, youCitation) },
+    { role: "user", content: userPrompt(account, signal, youCitation, companyContext) },
   ]);
   return generated ?? templateDraft(account, signal);
 }
@@ -87,8 +97,13 @@ export async function draftOutreach(
 export async function reviseDraft(
   previousBody: string,
   signal: Signal,
-  vetoReason: string
+  vetoReason: string,
+  companyContext: CompanyContext | null = null
 ): Promise<string> {
+  const sender = companyContext
+    ? `\n\nWho you're writing on behalf of (ground the offer/positioning in this — do not claim capabilities it doesn't support):\n${companyContext.content.slice(0, 1000)}`
+    : "";
+
   const generated = await generate([
     { role: "system", content: SYSTEM_PROMPT },
     {
@@ -100,7 +115,7 @@ ${previousBody}
 
 Veto reason: ${vetoReason}
 
-Rewrite it to resolve the veto. Keep it grounded in the cited signal: "${signal.sourceQuote}" (${signal.sourceUrl}). Return only the rewritten email.`,
+Rewrite it to resolve the veto. Keep it grounded in the cited signal: "${signal.sourceQuote}" (${signal.sourceUrl}).${sender} Return only the rewritten email.`,
     },
   ]);
   return generated ?? templateRevision(previousBody);

@@ -1,4 +1,4 @@
-import { Account, AuditLogEntry, Draft, FloorRun, PipelineResult, Signal } from "./types";
+import { Account, AuditLogEntry, CompanyContext, Draft, FloorRun, PipelineResult, Signal } from "./types";
 import { draftOutreach, reviseDraft } from "./writer";
 import { reviewDraft } from "./policies";
 import {
@@ -13,6 +13,7 @@ import {
   updateDraftStatus,
 } from "./store";
 import { mirrorApproval } from "./insforge";
+import { getCompanyContext } from "./company-context";
 import { CitedResearch } from "./youdotcom";
 import { gatherSignal } from "./researcher";
 import { prospect } from "./prospector";
@@ -46,7 +47,8 @@ export async function runPipeline(
   account: Account,
   signal: Signal,
   youCitation: CitedResearch | null = null,
-  sourcesChecked: string[] = []
+  sourcesChecked: string[] = [],
+  companyContext: CompanyContext | null = null
 ): Promise<PipelineResult> {
   const runId = createRun(account, signal);
   seedAccountAndSignal(account, signal);
@@ -81,7 +83,7 @@ export async function runPipeline(
     });
   }
 
-  const body = await draftOutreach(account, signal, youCitation);
+  const body = await draftOutreach(account, signal, youCitation, companyContext);
   let draft: Draft = {
     id: nextId("draft"),
     accountId: account.id,
@@ -99,7 +101,9 @@ export async function runPipeline(
     targetId: draft.id,
     authorityRule: "writer:draft_outreach",
     channel: "system",
-    detail: `Writer drafted outreach for ${account.name} off signal "${signal.type}".`,
+    detail: `Writer drafted outreach for ${account.name} off signal "${signal.type}"${
+      companyContext ? `, grounded in company context (${companyContext.sourceLabel ?? companyContext.sourceType})` : ""
+    }.`,
   });
 
   let revisions = 0;
@@ -132,7 +136,7 @@ export async function runPipeline(
       detail: `VETOED (${verdict.ruleName}): ${verdict.reason}`,
     });
 
-    const revisedBody = await reviseDraft(draft.body, signal, verdict.reason ?? "");
+    const revisedBody = await reviseDraft(draft.body, signal, verdict.reason ?? "", companyContext);
     const revised: Draft = {
       id: nextId("draft"),
       accountId: account.id,
@@ -204,6 +208,13 @@ export async function runFloor(goal: string): Promise<FloorRun> {
   const floorId = nextId("floor");
   const { goal: parsed, accounts, live, sourceLabel } = await prospect(goal);
 
+  // Fetched once per floor run (not per account) — it's the same sender
+  // background for every draft this floor writes, and it's a Postgres round
+  // trip we don't want to pay N times. A saved-but-blank row is treated as no
+  // context so the Writer prompt never gets an empty grounding block.
+  const fetchedContext = await getCompanyContext().catch(() => null);
+  const companyContext = fetchedContext?.content.trim() ? fetchedContext : null;
+
   const runs: PipelineResult[] = [];
   const skipped: FloorRun["skipped"] = [];
 
@@ -231,7 +242,7 @@ export async function runFloor(goal: string): Promise<FloorRun> {
       continue;
     }
 
-    runs.push(await runPipeline(account, signal, youCitation, sourcesChecked));
+    runs.push(await runPipeline(account, signal, youCitation, sourcesChecked, companyContext));
   }
 
   const auditLog = runs.flatMap((run) => run.auditLog);

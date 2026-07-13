@@ -5,21 +5,13 @@ import { AuditLogEntry, Draft, FloorRun, PipelineResult } from "@/lib/types";
 import { ACTOR_META, actionBadge } from "@/lib/actor-meta";
 import { LogoMark, SheenButton } from "@/components/Brand";
 import SettingsModal from "@/components/SettingsModal";
+import PipelineFlow from "@/components/PipelineFlow";
 
 type IntegrationStatus = Record<"insforge" | "nimble" | "youdotcom" | "band" | "hydra" | "kylon", boolean>;
 
 const REVEAL_INTERVAL_MS = 450;
 
 const EXAMPLE_GOAL = "Find used-car dealerships in the Bay Area worth reaching out to this week";
-
-const INTEGRATION_LABELS: { key: keyof IntegrationStatus; label: string }[] = [
-  { key: "band", label: "Band" },
-  { key: "insforge", label: "InsForge" },
-  { key: "nimble", label: "Nimble" },
-  { key: "youdotcom", label: "You.com" },
-  { key: "hydra", label: "Hydra" },
-  { key: "kylon", label: "Kylon" },
-];
 
 export default function GovernanceBoard() {
   const [goal, setGoal] = useState(EXAMPLE_GOAL);
@@ -148,30 +140,8 @@ export default function GovernanceBoard() {
       </div>
 
       <div className="mx-auto max-w-[1400px]">
-        {/* Integration status */}
-        {integrations && (
-          <div className="flex flex-wrap items-center gap-5 border-b border-black/10 px-6 py-3 md:px-10">
-            {INTEGRATION_LABELS.map(({ key, label }) => {
-              const live = integrations[key];
-              return (
-                <div
-                  key={key}
-                  className="flex items-center gap-1.5"
-                  title={live ? `${label}: live` : `${label}: not configured — using cached fallback`}
-                >
-                  <span className={`h-1.5 w-1.5 ${live ? "bg-black" : "bg-black/15"}`} />
-                  <span
-                    className={`font-display text-[10px] uppercase tracking-wide ${
-                      live ? "text-black/60" : "text-black/30"
-                    }`}
-                  >
-                    {label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {/* The pipeline, as a live flowchart of the sponsors doing the work. */}
+        <PipelineFlow integrations={integrations} running={running} />
 
         {/* Give the floor a goal — the only input the human provides. */}
         <div className="border-b border-black/10 px-6 py-6 md:px-10">
@@ -184,12 +154,12 @@ export default function GovernanceBoard() {
               onChange={(e) => setGoal(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !running && runTheFloor()}
               placeholder={EXAMPLE_GOAL}
-              className="min-w-[280px] flex-1 border border-black/15 px-4 py-2.5 text-sm outline-none transition-colors focus:border-black"
+              className="min-w-[280px] flex-1 rounded-full border border-black/15 px-5 py-2.5 text-sm outline-none transition-colors focus:border-black"
             />
             <SheenButton
               onClick={runTheFloor}
               disabled={running || !goal.trim()}
-              className="bg-black px-6 py-2.5 font-display text-xs uppercase tracking-[0.2em] text-white"
+              className="rounded-full bg-black px-6 py-2.5 font-display text-xs uppercase tracking-[0.2em] text-white"
               sheenClassName="bg-white/25"
             >
               {running ? "Floor is working…" : "Run the floor"}
@@ -207,6 +177,19 @@ export default function GovernanceBoard() {
               .
             </p>
           )}
+
+          {floor && revealDone && (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatPill label="Accounts run" value={floor.runs.length} />
+              <StatPill label="Auto-approved" value={floor.runs.filter((r) => !r.requiresHuman).length} />
+              <StatPill
+                label="Escalated"
+                value={floor.runs.filter((r) => r.requiresHuman).length}
+                highlight={awaitingApproval.length > 0}
+              />
+              <StatPill label="Skipped" value={floor.skipped.length} />
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-px bg-black/10 lg:grid-cols-2">
@@ -222,7 +205,7 @@ export default function GovernanceBoard() {
             )}
 
             {awaitingApproval.length > 0 && (
-              <div className="border border-black bg-amber-50 p-4">
+              <div className="rounded-2xl border border-black bg-amber-50 p-4">
                 <p className="font-display text-xs uppercase tracking-wide text-black">
                   {awaitingApproval.length} account{awaitingApproval.length === 1 ? "" : "s"} escalated
                   to you — the Manager has no authority to send these.
@@ -244,7 +227,7 @@ export default function GovernanceBoard() {
 
             {revealDone &&
               floor?.skipped.map((s) => (
-                <div key={s.accountId} className="border border-dashed border-black/15 p-4">
+                <div key={s.accountId} className="rounded-2xl border border-dashed border-black/15 p-4">
                   <div className="font-display text-xs uppercase tracking-wide text-black/45">
                     {s.accountName}
                   </div>
@@ -297,18 +280,22 @@ function AccountCard({
   const needsMe = run.requiresHuman && finalDraft.status === "escalated";
 
   return (
-    <div className={`space-y-3 border p-4 ${needsMe ? "border-black" : "border-black/10"}`}>
+    <div
+      className={`space-y-3 rounded-2xl border p-5 transition-colors ${
+        needsMe ? "border-black shadow-[0_1px_0_0_rgba(0,0,0,0.05)]" : "border-black/10"
+      }`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-display text-sm font-bold uppercase tracking-wide">{account.name}</span>
         <div className="flex items-center gap-2">
           <span
-            className={`px-2 py-0.5 font-display text-[10px] uppercase tracking-wide ${
+            className={`rounded-full px-3 py-1 font-display text-[10px] uppercase tracking-wide ${
               account.valueTier === "high_value" ? "bg-black text-white" : "border border-black/15 text-black/45"
             }`}
           >
             {account.valueTier === "high_value" ? "high value" : "routine"}
           </span>
-          <span className="border border-black/15 px-2 py-0.5 font-display text-[10px] uppercase tracking-wide text-black/60">
+          <span className="rounded-full border border-black/15 px-3 py-1 font-display text-[10px] uppercase tracking-wide text-black/60">
             {finalDraft.status.replace("_", " ")}
           </span>
         </div>
@@ -319,7 +306,7 @@ function AccountCard({
       </div>
 
       {/* The "why now", with receipts. */}
-      <div className="space-y-2 border border-black/10 bg-neutral-50 p-3">
+      <div className="space-y-2 rounded-xl border border-black/10 bg-neutral-50 p-4">
         <div className="font-display text-[10px] uppercase tracking-wide text-black/45">
           Why now · {signal.type.replace("_", " ")} · strength {signal.strength}
         </div>
@@ -343,7 +330,7 @@ function AccountCard({
         <summary className="cursor-pointer font-display text-[10px] uppercase tracking-wide text-black/45 hover:text-black">
           Draft ({run.drafts.length > 1 ? `${run.drafts.length} versions — Compliance forced a revision` : "1 version"})
         </summary>
-        <pre className="mt-2 whitespace-pre-wrap border border-black/10 bg-neutral-50 p-3 font-sans text-sm text-black/80">
+        <pre className="mt-2 whitespace-pre-wrap rounded-xl border border-black/10 bg-neutral-50 p-4 font-sans text-sm text-black/80">
           {finalDraft.body}
         </pre>
       </details>
@@ -354,13 +341,13 @@ function AccountCard({
             value={note}
             onChange={(e) => onNote(e.target.value)}
             placeholder="optional note…"
-            className="w-full border border-black/15 px-3 py-1.5 text-sm outline-none transition-colors focus:border-black"
+            className="w-full rounded-full border border-black/15 px-4 py-2 text-sm outline-none transition-colors focus:border-black"
           />
           <div className="flex gap-2">
             <SheenButton
               onClick={() => onDecide("approve")}
               disabled={deciding || !canDecide}
-              className="flex-1 justify-center bg-black py-2 font-display text-xs uppercase tracking-wide text-white"
+              className="flex-1 justify-center rounded-full bg-black py-2.5 font-display text-xs uppercase tracking-wide text-white"
               sheenClassName="bg-white/25"
             >
               Approve &amp; send
@@ -368,13 +355,32 @@ function AccountCard({
             <button
               onClick={() => onDecide("reject")}
               disabled={deciding || !canDecide}
-              className="flex-1 border border-black py-2 font-display text-xs uppercase tracking-wide transition-colors hover:bg-black hover:text-white disabled:pointer-events-none disabled:opacity-40"
+              className="flex-1 rounded-full border border-black py-2.5 font-display text-xs uppercase tracking-wide transition-colors hover:bg-black hover:text-white disabled:pointer-events-none disabled:opacity-40"
             >
               Reject
             </button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatPill({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
+  return (
+    <div
+      className={`rounded-2xl border px-4 py-3 transition-colors ${
+        highlight ? "border-black bg-black text-white" : "border-black/15 text-black"
+      }`}
+    >
+      <div className="font-display text-2xl font-bold tabular-nums">{value}</div>
+      <div
+        className={`mt-0.5 font-display text-[10px] uppercase tracking-wide ${
+          highlight ? "text-white/60" : "text-black/45"
+        }`}
+      >
+        {label}
+      </div>
     </div>
   );
 }
@@ -392,12 +398,12 @@ function TimelineRow({ entry }: { entry: AuditLogEntry }) {
   const meta = ACTOR_META[entry.actor];
   const badge = actionBadge(entry.action);
   return (
-    <li className="flex gap-3 border border-black/10 p-3 animate-[fadeIn_0.3s_ease-out]">
+    <li className="flex gap-3 rounded-xl border border-black/10 p-3 animate-[fadeIn_0.3s_ease-out]">
       <div className={`text-lg ${meta.color}`}>{meta.icon}</div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`font-display text-xs uppercase tracking-wide ${meta.color}`}>{meta.label}</span>
-          <span className={`px-1.5 py-0.5 font-display text-[10px] font-semibold uppercase tracking-wide ${badge.className}`}>
+          <span className={`rounded-full px-2 py-0.5 font-display text-[10px] font-semibold uppercase tracking-wide ${badge.className}`}>
             {badge.label}
           </span>
           {entry.accountName && (
