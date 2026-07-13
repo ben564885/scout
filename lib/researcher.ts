@@ -1,5 +1,13 @@
 import { Account, Signal, SignalType } from "./types";
-import { DETECTORS, MIN_LIVE_SIGNAL_COUNT, extractPage } from "./nimble";
+import {
+  DETECTORS,
+  MIN_LIVE_SIGNAL_COUNT,
+  MapsDetection,
+  extractPage,
+  detectReputationDipFromReviews,
+  detectReviewClusterFromReviews,
+  getPlaceReviews,
+} from "./nimble";
 import { DEALER_SOURCES, SIGNAL_PRIORITY } from "./sources";
 import { CitedResearch, researchWhyNow } from "./youdotcom";
 import { integrationStatus } from "./env";
@@ -48,6 +56,31 @@ function buildSignal(
   };
 }
 
+// Same idea as buildSignal, but off a MapsDetection: a real per-review
+// citation URL and a real review timestamp, instead of a guessed directory
+// URL and "detected right now."
+function buildMapsSignal(
+  account: Account,
+  type: "review_cluster" | "reputation_dip",
+  detection: MapsDetection
+): Signal {
+  const summaries: Record<"review_cluster" | "reputation_dip", string> = {
+    review_cluster: `${detection.count} recent Google reviews cite the same solvable service complaint.`,
+    reputation_dip: `Rating trending down on Google Maps — ${detection.sampleQuote}.`,
+  };
+
+  return {
+    id: nextId("sig"),
+    accountId: account.id,
+    type,
+    summary: summaries[type],
+    strength: Math.min(100, 40 + detection.count * 15),
+    sourceUrl: detection.sourceUrl,
+    sourceQuote: detection.sampleQuote,
+    detectedAt: new Date(detection.detectedAtMs || Date.now()).toISOString(),
+  };
+}
+
 export async function gatherSignal(
   account: Account,
   fallbackSignal: Signal | null = null
@@ -55,11 +88,37 @@ export async function gatherSignal(
   const sourcesChecked: string[] = [];
   const candidates: Signal[] = [];
 
+  // Preferred path: real, dated Google reviews for this exact place_id (from
+  // the Prospector's Maps pull) beat markdown-regex scraping of DealerRater/
+  // Yelp — each signal here cites one specific real review, not a guessed
+  // directory URL. Runs first so its "sourcesChecked" label leads the list.
+  if (integrationStatus.nimble && account.placeId) {
+    sourcesChecked.push("Google Maps Reviews");
+    const reviews = await getPlaceReviews(account.placeId);
+    if (reviews && reviews.length) {
+      const cluster = detectReviewClusterFromReviews(reviews);
+      if (cluster) candidates.push(buildMapsSignal(account, "review_cluster", cluster));
+
+      const dip = detectReputationDipFromReviews(reviews, account.rating ?? null);
+      if (dip) candidates.push(buildMapsSignal(account, "reputation_dip", dip));
+    }
+  }
+
   if (integrationStatus.nimble) {
+    // An account with a place_id already got the authoritative real-review
+    // check above — a markdown scrape of a generic Google search results
+    // page (the "google-reviews" DEALER_SOURCES entry) or DealerRater/Yelp
+    // is strictly noisier for the same underlying reviews, so skip those
+    // for any account we could actually query directly. Only accounts
+    // without a place_id (the cached mock-account path) fall back to them.
+    const sources = account.placeId
+      ? DEALER_SOURCES.filter((s) => s.detects !== "review_cluster" && s.detects !== "reputation_dip")
+      : DEALER_SOURCES;
+
     // Sources are independent reads — walk them concurrently instead of
     // sequentially so one account's research doesn't cost 5x an extract call.
     const pulls = await Promise.all(
-      DEALER_SOURCES.map(async (source) => {
+      sources.map(async (source) => {
         const url = source.url(account);
         const markdown = await extractPage(url);
         return { source, url, markdown };

@@ -41,6 +41,98 @@ export async function extractPage(url: string): Promise<string | null> {
   }
 }
 
+// ─── Google Maps agents (Prospector list-building + Researcher review data) ─
+// Nimble ships pre-built structured-extraction agents on top of `extract`.
+// Confirmed live (2026-07-13) against `nimble.agent.run(...)`:
+//   - "google_maps_search" -> data.parsing.entities.SearchResult[], each with
+//     title/address/phone_number/place_id/rating/review_summary
+//     (overall_rating, review_count, ratings_count by star) and
+//     place_information.website_url.
+//   - "google_maps_reviews" (params: { place_id }) -> data.parsing.entities.
+//     Review[], each with description (full text), rating, review_timestamp
+//     (unix ms), relative_time, and review_maps_link (a real, clickable
+//     citation URL for one specific dated review).
+// This replaces markdown-regex scraping for review-based signals with real
+// structured data — an actual review URL + quote + timestamp per signal,
+// not a guessed DealerRater slug and a keyword match over generic markdown.
+
+export type MapsPlace = {
+  title: string;
+  address: string;
+  phoneNumber: string | null;
+  placeId: string;
+  websiteUrl: string | null;
+  mapsUrl: string;
+  rating: number | null;
+  reviewCount: number | null;
+};
+
+export type MapsReview = {
+  text: string;
+  rating: number;
+  relativeTime: string;
+  timestampMs: number;
+  reviewUrl: string;
+};
+
+const AGENT_TIMEOUT_MS = 25_000;
+
+export async function searchDealerPlaces(query: string): Promise<MapsPlace[] | null> {
+  const nimble = getClient();
+  if (!nimble) return null;
+  try {
+    const result = await nimble.agent.run(
+      { agent: "google_maps_search", params: { query } },
+      { timeout: AGENT_TIMEOUT_MS, maxRetries: 0 }
+    );
+    // `data.parsing` is typed as a success/error union; narrow it ourselves
+    // since a successful google_maps_search response's `entities` shape isn't
+    // modeled per-agent in the SDK's generated types.
+    const parsing = result.data?.parsing as { entities?: Record<string, Record<string, any>[]> } | undefined;
+    const results = parsing?.entities?.SearchResult;
+    if (!Array.isArray(results)) return null;
+    return results
+      .filter((r) => r.place_id && r.title)
+      .map((r) => ({
+        title: r.title,
+        address: r.address ?? "",
+        phoneNumber: r.phone_number ?? null,
+        placeId: r.place_id,
+        websiteUrl: r.place_information?.website_url ?? null,
+        mapsUrl: r.place_url ?? "",
+        rating: r.review_summary?.overall_rating ?? null,
+        reviewCount: r.review_summary?.review_count ?? null,
+      }));
+  } catch (error) {
+    console.warn(`[nimble] google_maps_search failed for "${query}" (falling back):`, error);
+    return null;
+  }
+}
+
+export async function getPlaceReviews(placeId: string): Promise<MapsReview[] | null> {
+  const nimble = getClient();
+  if (!nimble) return null;
+  try {
+    const result = await nimble.agent.run(
+      { agent: "google_maps_reviews", params: { place_id: placeId } },
+      { timeout: AGENT_TIMEOUT_MS, maxRetries: 0 }
+    );
+    const parsing = result.data?.parsing as { entities?: Record<string, Record<string, any>[]> } | undefined;
+    const reviews = parsing?.entities?.Review;
+    if (!Array.isArray(reviews)) return null;
+    return reviews.map((r) => ({
+      text: r.description ?? "",
+      rating: Number(r.rating) || 0,
+      relativeTime: r.relative_time ?? "",
+      timestampMs: Number(r.review_timestamp) || 0,
+      reviewUrl: r.review_maps_link ?? "",
+    }));
+  } catch (error) {
+    console.warn(`[nimble] google_maps_reviews failed for ${placeId} (falling back):`, error);
+    return null;
+  }
+}
+
 // Best-effort heuristic signal detectors over extracted page text. Confirmed
 // against real Nimble output (2026-07-13): a fictional/non-existent dealer
 // URL gets redirected to the site's generic landing page, and naive keyword
@@ -131,3 +223,71 @@ export const DETECTORS: Record<string, (markdown: string) => Detection> = {
   new_location: detectNewLocation,
   reputation_dip: detectReputationDip,
 };
+
+// ─── Detectors over structured Maps reviews (real quote + real date + real
+// citation URL per signal, instead of a keyword match over scraped markdown).
+
+const RECENT_REVIEW_WINDOW_DAYS = 120;
+
+function daysSince(timestampMs: number): number {
+  return (Date.now() - timestampMs) / (1000 * 60 * 60 * 24);
+}
+
+export type MapsDetection = {
+  count: number;
+  sampleQuote: string;
+  sourceUrl: string;
+  detectedAtMs: number;
+};
+
+// Negative rating is required, not just a keyword hit: a keyword like
+// "wait" or "financing" matches plenty of 5★ reviews praising a short wait
+// or smooth financing (confirmed live — a 5★ One Toyota of Oakland review
+// praising "quick and easy" service tripped the old keyword-only check via
+// "wait comfortably" and "service advi[sor]"). Real per-review star ratings
+// are exactly what markdown-scraping never had; use them.
+const NEGATIVE_RATING_THRESHOLD = 3;
+
+export function detectReviewClusterFromReviews(reviews: MapsReview[]): MapsDetection | null {
+  const recentComplaints = reviews
+    .filter((r) => r.timestampMs && daysSince(r.timestampMs) <= RECENT_REVIEW_WINDOW_DAYS)
+    .filter((r) => r.rating > 0 && r.rating <= NEGATIVE_RATING_THRESHOLD)
+    .filter((r) => COMPLAINT_KEYWORDS.test(r.text))
+    .sort((a, b) => b.timestampMs - a.timestampMs);
+
+  if (recentComplaints.length < MIN_LIVE_SIGNAL_COUNT) return null;
+
+  const top = recentComplaints[0];
+  return {
+    count: recentComplaints.length,
+    sampleQuote: top.text.slice(0, 160),
+    sourceUrl: top.reviewUrl,
+    detectedAtMs: top.timestampMs,
+  };
+}
+
+// Same "recent average vs lifetime average" logic as detectReputationDip, but
+// off real per-review ratings/timestamps instead of every star pattern found
+// on a scraped page (which conflates the dealer's own rating with unrelated
+// numbers elsewhere on the page).
+export function detectReputationDipFromReviews(
+  reviews: MapsReview[],
+  overallRating: number | null
+): MapsDetection | null {
+  if (!overallRating || reviews.length < 4) return null;
+
+  const byRecency = [...reviews].sort((a, b) => b.timestampMs - a.timestampMs);
+  const recent = byRecency.slice(0, Math.max(3, Math.floor(byRecency.length / 3)));
+  const recentAverage = recent.reduce((sum, r) => sum + r.rating, 0) / recent.length;
+  const drop = overallRating - recentAverage;
+
+  if (drop < 0.5) return null;
+
+  const worst = [...recent].sort((a, b) => a.rating - b.rating)[0];
+  return {
+    count: Math.max(MIN_LIVE_SIGNAL_COUNT, Math.round(drop * 4)),
+    sampleQuote: `recent reviews averaging ${recentAverage.toFixed(1)}★ against a ${overallRating.toFixed(1)}★ lifetime average — most recently: "${worst.text.slice(0, 100)}"`,
+    sourceUrl: worst.reviewUrl,
+    detectedAtMs: worst.timestampMs,
+  };
+}

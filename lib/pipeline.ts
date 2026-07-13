@@ -1,7 +1,17 @@
 import { Account, AuditLogEntry, Draft, FloorRun, PipelineResult, Signal } from "./types";
 import { draftOutreach, reviseDraft } from "./writer";
 import { reviewDraft } from "./policies";
-import { addDraft, appendAudit, createRun, getRun, nextId, seedAccountAndSignal, updateDraftStatus } from "./store";
+import {
+  addDraft,
+  appendAudit,
+  clearPendingEscalation,
+  createRun,
+  getRun,
+  nextId,
+  seedAccountAndSignal,
+  setPendingEscalation,
+  updateDraftStatus,
+} from "./store";
 import { mirrorApproval } from "./insforge";
 import { CitedResearch } from "./youdotcom";
 import { gatherSignal } from "./researcher";
@@ -151,6 +161,7 @@ export async function runPipeline(
 
   if (requiresHuman) {
     updateDraftStatus(runId, draft.id, "escalated");
+    setPendingEscalation(runId, draft.id, account.name);
     log(runId, account, {
       actor: "manager",
       action: "escalate",
@@ -246,24 +257,27 @@ export function recordHumanDecision(
   runId: string,
   draftId: string,
   decision: "approve" | "reject",
-  note?: string
+  note?: string,
+  channel: "band" | "imessage" = "band"
 ): AuditLogEntry | null {
   const run = getRun(runId);
   if (!run) return null;
 
   updateDraftStatus(runId, draftId, decision === "approve" ? "approved" : "rejected");
-  mirrorApproval({ draftId, decidedBy: "human", decision, channel: "band", note });
+  clearPendingEscalation(draftId);
+  mirrorApproval({ draftId, decidedBy: "human", decision, channel, note });
 
+  const via = channel === "imessage" ? "by text" : "in Band";
   return log(runId, run.account, {
     actor: "human",
     action: decision,
     targetId: draftId,
     authorityRule: "human:approve_high_value",
-    channel: "band",
+    channel,
     detail:
       decision === "approve"
-        ? `Human approved${note ? ` — "${note}"` : ""}. Band recorded the decision and released the send.`
-        : `Human rejected${note ? ` — "${note}"` : ""}. Band recorded the decision and killed the send.`,
+        ? `Human approved ${via}${note ? ` — "${note}"` : ""}. Band recorded the decision and released the send.`
+        : `Human rejected ${via}${note ? ` — "${note}"` : ""}. Band recorded the decision and killed the send.`,
   });
 }
 

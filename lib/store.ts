@@ -16,6 +16,28 @@ type RunState = {
 const runs = new Map<string, RunState>();
 let counter = 0;
 
+// The one escalation currently awaiting a human decision over text. Scoped
+// to a single pointer, not a queue — matches the PRD's single-demo-account
+// assumption (§10: "Auth / multi-tenant beyond a single demo account" is
+// explicitly out of scope), so a bare "approve" text has an unambiguous
+// target. The Band UI approval flow (app/api/runs/[id]/approve) doesn't need
+// this pointer at all since the browser already knows which draft it's
+// approving.
+type PendingEscalation = { runId: string; draftId: string; accountName: string };
+let pendingEscalation: PendingEscalation | null = null;
+
+export function setPendingEscalation(runId: string, draftId: string, accountName: string) {
+  pendingEscalation = { runId, draftId, accountName };
+}
+
+export function getPendingEscalation(): PendingEscalation | null {
+  return pendingEscalation;
+}
+
+export function clearPendingEscalation(draftId: string) {
+  if (pendingEscalation?.draftId === draftId) pendingEscalation = null;
+}
+
 export function nextId(prefix: string) {
   counter += 1;
   return `${prefix}-${counter}`;

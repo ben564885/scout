@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { runFloor } from "@/lib/pipeline";
 import { mirrorRunToBand } from "@/lib/band";
+import { announceFloorGoal, mirrorRunToKylon } from "@/lib/kylon";
 
 // The floor's only entry point (PRD §5): one plain-language goal, and the whole
 // team runs — Prospector builds the list, Researcher cites a "why now", Writer
@@ -19,11 +20,14 @@ export async function POST(req: NextRequest) {
 
   const floor = await runFloor(goal.trim());
 
-  // Replay each run onto Band after the response is sent — it's several
-  // sequential network calls and shouldn't add latency to the demo.
+  // Replay each run onto Band and Kylon after the response is sent — both
+  // are several sequential network/CLI round-trips and shouldn't add
+  // latency to the demo.
   after(async () => {
+    await announceFloorGoal(goal.trim(), floor.prospecting.sourceLabel, floor.prospecting.live);
     for (const run of floor.runs) {
       await mirrorRunToBand(run);
+      await mirrorRunToKylon(run);
     }
   });
 

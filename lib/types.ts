@@ -14,6 +14,13 @@ export type Account = {
   contactPath: string;
   valueTier: ValueTier;
   estValueUsd: number;
+  // Populated only when the account came from a live Nimble Maps pull —
+  // lets the Researcher fetch structured reviews for this exact place
+  // instead of re-scraping a review site by name/city guesswork.
+  placeId?: string;
+  phone?: string;
+  rating?: number;
+  reviewCount?: number;
 };
 
 export type SignalType =

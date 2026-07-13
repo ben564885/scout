@@ -1,5 +1,5 @@
 import { Account, ValueTier } from "./types";
-import { extractPage } from "./nimble";
+import { extractPage, MapsPlace, searchDealerPlaces } from "./nimble";
 import { DEALER_DIRECTORIES } from "./sources";
 import { ACCOUNTS } from "./mock-data";
 import { integrationStatus } from "./env";
@@ -74,6 +74,30 @@ export function tierFor(estValueUsd: number): ValueTier {
   return estValueUsd >= HIGH_VALUE_THRESHOLD_USD ? "high_value" : "routine";
 }
 
+// Real structured place -> Account. Preferred over parseDirectory below: a
+// Nimble google_maps_search hit carries a real place_id (lets the Researcher
+// pull that exact place's reviews next), a real phone number (a better
+// contact_path than a guessed URL), and a real rating/review_count instead of
+// heuristics scraped off a directory page.
+function accountFromPlace(place: MapsPlace, goal: Goal): Account {
+  const estValueUsd = estimateValue(place.title);
+  return {
+    id: `acct-${place.placeId}`,
+    name: place.title,
+    vertical: goal.vertical,
+    city: goal.city,
+    region: goal.region,
+    website: place.websiteUrl ?? place.mapsUrl,
+    contactPath: place.phoneNumber ?? place.websiteUrl ?? place.mapsUrl,
+    valueTier: tierFor(estValueUsd),
+    estValueUsd,
+    placeId: place.placeId,
+    phone: place.phoneNumber ?? undefined,
+    rating: place.rating ?? undefined,
+    reviewCount: place.reviewCount ?? undefined,
+  };
+}
+
 // Dealer names as they appear in a scraped directory: markdown links or
 // headings whose text reads like a dealership. We require a dealer-ish token so
 // the parser doesn't scoop up the directory site's own nav chrome ("Sign in",
@@ -129,6 +153,21 @@ export async function prospect(rawGoal: string, limit = 3): Promise<ProspectResu
   const goal = parseGoal(rawGoal);
 
   if (integrationStatus.nimble) {
+    // Preferred path: Nimble's google_maps_search agent returns real dealers
+    // with a place_id, phone number, and rating — no markdown scraping or
+    // regex needed to build the list. Falls through to the directory scrape
+    // below only if Maps comes back empty (e.g. an obscure city).
+    const places = await searchDealerPlaces(`used car dealerships in ${goal.city}, ${goal.region}`);
+    if (places && places.length >= 2) {
+      const accounts = places.map((place) => accountFromPlace(place, goal));
+      return {
+        goal,
+        accounts: rank(accounts).slice(0, limit),
+        live: true,
+        sourceLabel: "Google Maps (Nimble)",
+      };
+    }
+
     for (const directory of DEALER_DIRECTORIES) {
       const markdown = await extractPage(directory.url(goal.city, goal.region));
       if (!markdown) continue;
