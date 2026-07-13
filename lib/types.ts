@@ -95,6 +95,10 @@ export type AuditLogEntry = {
   channel?: "band" | "imessage" | "system";
   detail: string;
   createdAt: string;
+  // Stamped so a single merged timeline can attribute each line to the account
+  // it was about, once the floor runs many accounts off one goal.
+  accountId?: string;
+  accountName?: string;
 };
 
 export type Policy = {
@@ -113,4 +117,24 @@ export type PipelineResult = {
   finalDraft: Draft;
   auditLog: AuditLogEntry[];
   requiresHuman: boolean;
+};
+
+// One plain-language goal in, a whole floor's worth of work out (PRD §5).
+export type FloorRun = {
+  floorId: string;
+  goal: {
+    raw: string;
+    city: string;
+    region: string;
+    vertical: string;
+  };
+  prospecting: {
+    live: boolean; // did Nimble build this list, or is it the cached fallback?
+    sourceLabel: string;
+  };
+  runs: PipelineResult[];
+  // Accounts the Researcher could not substantiate a "why now" for. Scout does
+  // not email an account it has no reason to email.
+  skipped: { accountId: string; accountName: string; reason: string }[];
+  auditLog: AuditLogEntry[]; // merged across every run, in order
 };
