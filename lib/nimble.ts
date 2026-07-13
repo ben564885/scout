@@ -77,6 +77,15 @@ export type MapsReview = {
 
 const AGENT_TIMEOUT_MS = 25_000;
 
+// Nimble's `title` occasionally comes back with markdown heading/list markers
+// still attached (e.g. "## Coggin Honda of Orlando") since the field is
+// scraped off a rendered page rather than a clean structured API. Strip that
+// before it becomes account.name — it flows straight into UI copy and the
+// Writer's draft greeting (lib/writer.ts).
+function cleanTitle(title: string): string {
+  return title.replace(/^[#*\-•\s]+/, "").trim();
+}
+
 export async function searchDealerPlaces(query: string, page?: number): Promise<MapsPlace[] | null> {
   const nimble = getClient();
   if (!nimble) return null;
@@ -94,7 +103,7 @@ export async function searchDealerPlaces(query: string, page?: number): Promise<
     return results
       .filter((r) => r.place_id && r.title)
       .map((r) => ({
-        title: r.title,
+        title: cleanTitle(r.title),
         address: r.address ?? "",
         phoneNumber: r.phone_number ?? null,
         placeId: r.place_id,
